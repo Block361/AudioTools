@@ -2,6 +2,7 @@
 #include "aoip/discovery.hpp"
 #include "aoip/network.hpp"
 #include "app_window.hpp"
+#include "clock_view.hpp"
 #include "matrix_model.hpp"
 #include <ctime>
 #include <memory>
@@ -269,8 +270,8 @@ public:
     std::vector<std::wstring> heads =
         tab == 1   ? std::vector<std::wstring>{L"Device", L"State", L"IP address", L"TX / RX",
                                                L"Sample rate"}
-        : tab == 2 ? std::vector<std::wstring>{L"Device", L"Clock source", L"Lock state",
-                                               L"Sample rate", L"PTP"}
+        : tab == 2 ? std::vector<std::wstring>{L"Device", L"Clock source", L"Audio clock",
+                                               L"PTP state", L"Offset / path delay"}
         : tab == 3 ? std::vector<std::wstring>{L"Device", L"IP address", L"TX RTP bytes",
                                                L"RX packets", L"Lost / late"}
                    : std::vector<std::wstring>{L"Time", L"Event"};
@@ -331,9 +332,15 @@ public:
         values.insert(values.end(), {online ? L"Online" : L"Offline", wide(d.at("host")),
                                      std::to_wstring(tx) + L" / " + std::to_wstring(rx),
                                      std::to_wstring(rate) + L" Hz"});
-      if (tab == 2)
-        values.insert(values.end(), {L"Internal / software", L"Free running",
-                                     std::to_wstring(rate) + L" Hz", L"Not implemented"});
+      if (tab == 2) {
+        const auto clock = d.value("clock", Json::object());
+        values.insert(
+            values.end(),
+            {wide(clock.value("mode", "Internal / software")),
+             clock.value("synchronized", false) ? L"Locked" : L"Free running",
+             wide(clock.value("state", "Free running")),
+             clock_value(clock, "offsetNs") + L" / " + clock_value(clock, "pathDelayNs")});
+      }
       if (tab == 3)
         values.insert(values.end(),
                       {wide(d.at("host")), std::to_wstring(bytes), std::to_wstring(received),
@@ -373,6 +380,14 @@ public:
         return;
       }
     if (tab != 0) {
+      if (edit && tab == 2 && y >= 216) {
+        const int row = (y - 216) / 29 + sy;
+        const auto ds = visible_devices();
+        if (row >= 0 && row < int(ds.size()))
+          MessageBoxW(window, clock_details(ds[row].value("clock", Json::object())).c_str(),
+                      L"OpenAoIP · Clock details", MB_OK | MB_ICONINFORMATION);
+        return;
+      }
       if (edit && tab == 1 && y >= 216) {
         const int row = (y - 216) / 29 + sy;
         const auto ds = visible_devices();

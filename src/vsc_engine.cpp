@@ -14,6 +14,7 @@ Json to_json(const Settings& s) {
           {"controller", s.controller},
           {"backend", s.backend},
           {"clockSource", s.clock_source},
+          {"ptpDomain", s.ptp_domain},
           {"txChannels", s.tx_channels},
           {"rxChannels", s.rx_channels},
           {"sampleRate", s.rate},
@@ -30,6 +31,7 @@ Settings from_json(const Json& j) {
   s.controller = j.value("controller", s.controller);
   s.backend = j.value("backend", s.backend);
   s.clock_source = j.value("clockSource", "internal");
+  s.ptp_domain = j.value("ptpDomain", 0);
   s.tx_channels = j.value("txChannels", 8);
   s.rx_channels = j.value("rxChannels", 8);
   s.rate = j.value("sampleRate", 48000);
@@ -53,9 +55,9 @@ struct Engine::Impl {
       throw std::runtime_error("Invalid virtual channel count or sample rate");
     if (settings.backend != "asio" && settings.backend != "wdm")
       throw std::runtime_error("Unknown Windows audio backend");
-    if (settings.clock_source != "internal")
-      throw std::runtime_error(
-          "PTP is not implemented; use Internal. Clock lock is never simulated.");
+    if (settings.clock_source != "internal" && settings.clock_source != "ptp-monitor")
+      throw std::runtime_error("PTP audio discipline is not implemented; select Internal or PTPv2 "
+                               "monitor for measurements");
     if (settings.buffer_frames < 64 || settings.buffer_frames > 1024 ||
         (settings.buffer_frames & (settings.buffer_frames - 1)))
       throw std::runtime_error("ASIO buffer must be 64/128/256/512/1024 frames");
@@ -79,6 +81,8 @@ struct Engine::Impl {
       c.latency_ms = settings.latency_ms;
       c.tx_names = settings.tx_names;
       c.rx_names = settings.rx_names;
+      c.clock_source = settings.clock_source;
+      c.ptp_domain = settings.ptp_domain;
       c.capture = [this](std::span<Pcm> p) { return capture(p); };
       c.playback = [this](std::span<const Pcm> p) { playback(p); };
       session = std::make_unique<AudioSession>(std::move(c));
@@ -153,7 +157,7 @@ struct Engine::Impl {
     out["wdm"] = wdm ? wdm->status() : Json(nullptr);
     out["clockMode"] = "Software";
     out["synchronized"] = false;
-    out["ptpAvailable"] = false;
+    out["ptpAvailable"] = out.at("clock").value("ptpAvailable", false);
     out["txPeaks"] = Json::array();
     out["rxPeaks"] = Json::array();
     for (int c = 0; c < settings.tx_channels; ++c)

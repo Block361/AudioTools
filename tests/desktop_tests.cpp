@@ -96,6 +96,11 @@ void routing_and_matrix_test() {
   check(model.transmitters().size() == 3, "Refresh discarded collapse preference");
   model.expand_all(true);
   check(model.receivers().size() == 14, "Expand failed");
+  auto malformed_clock = controller.state().at("devices")[0];
+  malformed_clock["clock"]["mode"] = nullptr;
+  const auto invalid = http.Post("/api/heartbeat", malformed_clock.dump(), "application/json");
+  check(invalid && invalid->status == 400,
+        "Malformed clock text was accepted for native UI rendering");
 }
 void bridge_ownership_test() {
   const auto name = L"Local\\OpenAoIP.Test.ownership." + std::to_wstring(GetCurrentProcessId());
@@ -127,7 +132,8 @@ void bridge_ownership_test() {
   rejects([&] { holder.configure(2, 2, 48000, 2); });
   holder.get()->asio_pid = 0;
   holder.configure(2, 2, 48000, 2);
-  check(holder.get()->active == 2, "Windows backend briefly exposed an ASIO-compatible active state");
+  check(holder.get()->active == 2,
+        "Windows backend briefly exposed an ASIO-compatible active state");
   holder.get()->active = 0;
 }
 int main() {

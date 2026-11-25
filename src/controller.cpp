@@ -491,6 +491,15 @@ struct Controller::Impl {
     device["format"] = format;
     device["clock"] = body.value(
         "clock", Json{{"mode", "software"}, {"synchronized", false}, {"ptpSupported", false}});
+    const auto& clock=device["clock"];
+    if(!clock.is_object()||clock.dump().size()>4096)throw std::runtime_error("Invalid clock status");
+    for(const auto* key:{"source","mode","state","timestamping","interface","error"})if(clock.contains(key)&&!clock.at(key).is_string())throw std::runtime_error("Invalid clock status text");
+    if(clock.contains("domain"))bounded_int(clock,"domain",0,255);
+    for(const auto* key:{"source","mode","state","timestamping","interface","error","masterPortIdentity","grandmasterIdentity","masterAddress"})
+      if(clock.contains(key)&&!clock.at(key).is_null()&&(!clock.at(key).is_string()||clock.at(key).get<std::string>().size()>256))throw std::runtime_error("Invalid clock status text");
+    for(const auto* key:{"synchronized","locked","audioLocked","ptpSupported","ptpAvailable","experimental","trackingStable","measurementFresh"})
+      if(clock.contains(key)&&!clock.at(key).is_boolean())throw std::runtime_error("Invalid clock status flag");
+    for(const auto* key:{"offsetNs","pathDelayNs","frequencyPpm","domain"})if(clock.contains(key)&&!clock.at(key).is_null()&&!clock.at(key).is_number())throw std::runtime_error("Invalid clock measurement");
     return device;
   }
   Json named(Json d)const{
@@ -577,7 +586,7 @@ struct Controller::Impl {
   Json state_locked() const {
     Json result = {
         {"name", "OpenAoIP"},
-        {"version", "0.6.0"},
+        {"version", "0.6.1"},
         {"revision", revision},
         {"localAudioActive", local_audio_active.load()},
         {"localAudioConfig", local_audio_config},

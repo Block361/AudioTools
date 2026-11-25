@@ -46,7 +46,7 @@ try {
     $taskProbe.Start(); $taskPort = $taskProbe.LocalEndpoint.Port; $taskProbe.Stop()
     $taskController = Start-Process -FilePath (Join-Path $BinaryDirectory 'OpenAoIP Controller.exe') -ArgumentList @('--port',"$taskPort",'--data-dir',('"' + (Join-Path $taskRoot 'controller') + '"')) -WindowStyle Hidden -PassThru
     $taskUrl = "http://127.0.0.1:$taskPort"
-    Wait-Condition { try { (Invoke-RestMethod "$taskUrl/api/state" -TimeoutSec 1).version -eq '0.6.0' } catch { $false } } 'native controller HTTP startup'
+    Wait-Condition { try { (Invoke-RestMethod "$taskUrl/api/state" -TimeoutSec 1).version -eq '0.6.1' } catch { $false } } 'native controller HTTP startup'
     $taskVscFolder = Join-Path $taskRoot 'soundcard'; New-Item -ItemType Directory -Path $taskVscFolder | Out-Null
     @{id='native-ui-test';name='Native UI Test';controller=$taskUrl;interface='127.0.0.1';txChannels=2;rxChannels=2;sampleRate=48000;latencyMs=60;backend='asio'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskVscFolder 'settings.json') -Encoding UTF8
     $taskSoundcard = Start-Process -FilePath (Join-Path $BinaryDirectory 'OpenAoIP Virtual Soundcard.exe') -ArgumentList @('--data-dir',('"' + $taskVscFolder + '"'),'--engine-endpoint',('"' + $taskEndpoint + '"')) -WindowStyle Hidden -PassThru

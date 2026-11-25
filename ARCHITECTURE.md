@@ -1,9 +1,10 @@
-# OpenAoIP 0.6 architecture and validation boundaries
+# OpenAoIP 0.6.1 architecture and validation boundaries
 
 | Module | Responsibility |
 |---|---|
 | `aoip_audio` | Existing PCM/RTP and jitter buffers, hardware I/O, new native float endpoints and adaptive SPSC buffers |
 | `aoip_network` | Sockets, network initialization and discovery |
+| `aoip_clock` | Experimental PTPv2 E2E monitoring, measurements and shared per-process ownership |
 | `aoip_core` | Registration/plans, routing/persistence and sender/receiver lifecycle |
 | `aoip_session` | Shared discovery, network-node ownership, PCM conversion and measured diagnostics |
 | `aoip_bridge_engine` | Multiple WASAPI nodes, patches, meters, reconnection and drift buffers |
@@ -65,8 +66,9 @@ Bandwidth is observed RTP traffic, excluding IP/UDP/Ethernet overhead and contro
 
 ## Experimental boundaries
 
-PTP and grandmaster election are unimplemented. Internal/free-running is the only accepted
-clock source; PTP selection returns an explicit error. Clock Locked is never fabricated.
+PTP monitoring is implemented in optional `ptp-monitor` mode; see [PTP test mode](./PTP.md).
+Audio clock discipline and grandmaster election remain unimplemented. `internal` stays the default;
+the disciplined `ptp` audio mode still returns an explicit error. Clock Locked is never fabricated.
 Bridge drift correction does not create phase coherence across computers.
 
 ASIO remains a user-mode x64 COM driver and needs no Windows test mode. The audio-memory ABI

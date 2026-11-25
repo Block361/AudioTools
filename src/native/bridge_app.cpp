@@ -3,6 +3,7 @@
 #include "aoip/engine_host.hpp"
 #include "aoip/network.hpp"
 #include "app_window.hpp"
+#include "clock_view.hpp"
 #include <cmath>
 #include <sstream>
 
@@ -177,7 +178,8 @@ enum Id {
   NetLatency,
   LocalLatency,
   Clock,
-  VScroll
+  VScroll,
+  PtpDomain
 };
 class BridgeWindow final : public AppWindow {
 public:
@@ -213,7 +215,8 @@ public:
     choose(Buffer, buffers, settings.buffer_frames);
     choose(NetLatency, net_latencies, settings.latency_ms);
     choose(LocalLatency, local_latencies, settings.local_latency_ms);
-    select(Clock, 0);
+    select(Clock, settings.clock_source == "ptp-monitor" ? 1 : 0);
+    set_text(controls[PtpDomain], std::to_wstring(settings.ptp_domain));
   }
   void created() override {
     if (!preview) {
@@ -253,7 +256,9 @@ public:
     add_numbers(Buffer, buffers);
     add_numbers(NetLatency, net_latencies);
     add_numbers(LocalLatency, local_latencies);
-    add_combo(Clock, {L"Internal / drift compensated", L"PTPv2 · not implemented"});
+    add_combo(Clock, {L"Internal / drift compensated", L"PTPv2 monitor (experimental)"});
+    add(PtpDomain, L"EDIT", L"0", WS_BORDER | ES_NUMBER);
+    SendMessageW(controls[PtpDomain], EM_SETLIMITTEXT, 3, 0);
     add(VScroll, L"SCROLLBAR", L"", SBS_VERT);
     populate();
     if (!preview) {
@@ -285,7 +290,8 @@ public:
     settings.buffer_frames = buffers.at(selection(Buffer));
     settings.latency_ms = net_latencies.at(selection(NetLatency));
     settings.local_latency_ms = local_latencies.at(selection(LocalLatency));
-    settings.clock_source = selection(Clock) == 0 ? "internal" : "ptp";
+    settings.clock_source = selection(Clock) == 0 ? "internal" : "ptp-monitor";
+    settings.ptp_domain = ptp_domain(controls[PtpDomain]);
   }
   int half() const {
     return width / 2;
@@ -314,7 +320,8 @@ public:
     position(Buffer, {half() + 112, 188, a - 8, 28});
     position(NetLatency, {104, 228, b, 28});
     position(LocalLatency, {112 + b, 228, b, 28});
-    position(Clock, {half() + 112, 228, a - 8, 28});
+    position(Clock, {half() + 112, 228, a - 78, 28});
+    position(PtpDomain, {width - 74, 228, 60, 28});
     position(VScroll, {width - 25, 338, 14, std::max(1, height - 461)});
     update_scroll();
   }
@@ -338,6 +345,7 @@ public:
     EnableWindow(controls[Edit], !active && chosen >= 0 && chosen < int(settings.endpoints.size()));
     EnableWindow(controls[Remove],
                  !active && chosen >= 0 && chosen < int(settings.endpoints.size()));
+    EnableWindow(controls[PtpDomain], !active && selection(Clock) == 1);
     set_text(controls[Start], active ? L"Stop" : L"Start");
     update_scroll();
   }
@@ -391,7 +399,11 @@ public:
     }
     update_controls();
   }
-  void command(int id, int) override {
+  void command(int id, int notice) override {
+    if (id == Clock && notice == CBN_SELCHANGE) {
+      update_controls();
+      return;
+    }
     if (preview)
       return;
     if (id == Start) {
@@ -486,6 +498,7 @@ public:
                                                                      {228, L"Clock source"}})
       text(dc, {half() + 10, row.first, 98, 28}, row.second, 11, muted);
     const int label_width = (half() - 126) / 2;
+    text(dc, {width - 74, 216, 60, 12}, L"PTP domain", 9, muted);
     text(dc, {104, 258, label_width, 14}, L"Network / receive", 9, muted);
     text(dc, {112 + label_width, 258, label_width, 14}, L"Local / drift buffer", 9, muted);
     const std::vector<std::wstring> tabs{L"Sources / Outputs", L"Network channels", L"Diagnostics"};
@@ -586,24 +599,38 @@ public:
     line(dc, 12, bottom + 2, width - 12, bottom + 2, border);
     const auto band =
         (live.value("txBitsPerSecond", 0.) + live.value("rxBitsPerSecond", 0.)) / 1000.;
+    const auto clock = live.value("clock", Json::object());
+    const bool monitoring = clock.value("source", settings.clock_source) == "ptp-monitor";
     text(dc, {16, bottom + 10, width - 32, 25},
          L"Network: " +
              std::wstring(connected ? L"Connected"
                           : active  ? L"Waiting for controller"
                                     : L"Not connected") +
-             L"   ·   Clock: internal / free running   ·   " +
+             (monitoring ? L"   ·   PTP monitor / audio free running   ·   "
+                         : L"   ·   Clock: internal / free running   ·   ") +
              std::to_wstring(static_cast<int>(band)) + L" kbit/s",
          11, connected ? green : muted);
     text(dc, {16, bottom + 39, width - 32, 25},
          L"Packet loss: " + std::to_wstring(live.value("packetLoss", 0ULL)) + L"   ·   Late: " +
              std::to_wstring(live.value("latePackets", 0ULL)) + L"   ·   Underruns: " +
-             std::to_wstring(live.value("bufferUnderruns", 0ULL)) + L"   ·   PTP: unavailable",
+             std::to_wstring(live.value("bufferUnderruns", 0ULL)) + L"   ·   PTP: " +
+             (monitoring ? wide(clock.value("state", "Stopped")) : L"Off"),
          11, muted);
     text(dc, {16, bottom + 68, width - 32, 24},
-         L"WASAPI user mode · Windows performs device access without an OpenAoIP kernel driver.",
+         monitoring ? L"PTP offset: " + clock_value(clock, "offsetNs") + L"   ·   Path delay: " +
+                          clock_value(clock, "pathDelayNs") + L"   ·   Drift: " +
+                          clock_value(clock, "frequencyPpm", 1., L" ppm") +
+                          L"   ·   Double-click for details"
+                    : L"WASAPI user mode · Windows performs device access without an OpenAoIP "
+                      L"kernel driver.",
          10, muted);
   }
   void click(int x, int y, bool edit) override {
+    if (edit && y >= height - 124 && y < height - 27) {
+      MessageBoxW(window, clock_details(live.value("clock", Json::object())).c_str(),
+                  L"OpenAoIP · Clock details", MB_OK | MB_ICONINFORMATION);
+      return;
+    }
     for (int i = 0; i < 3; ++i)
       if (Box{12 + i * 166, 281, 160, 29}.contains(x, y)) {
         tab = i;

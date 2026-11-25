@@ -93,6 +93,7 @@ Json to_json(const Settings& s) {
           {"latencyMs", s.latency_ms},
           {"localLatencyMs", s.local_latency_ms},
           {"clockSource", s.clock_source},
+          {"ptpDomain", s.ptp_domain},
           {"txNames", s.tx_names},
           {"rxNames", s.rx_names},
           {"endpoints", endpoints}};
@@ -110,6 +111,7 @@ Settings from_json(const Json& j) {
   s.latency_ms = j.value("latencyMs", 60);
   s.local_latency_ms = j.value("localLatencyMs", 20);
   s.clock_source = j.value("clockSource", "internal");
+  s.ptp_domain = j.value("ptpDomain", 0);
   s.tx_names = j.value("txNames", std::vector<std::string>{});
   s.rx_names = j.value("rxNames", std::vector<std::string>{});
   for (const auto& value : j.value("endpoints", Json::array())) {
@@ -147,9 +149,9 @@ struct Engine::Impl {
         settings.local_latency_ms < 5 || settings.local_latency_ms > 200)
       throw std::runtime_error(
           "Bridge requires 1-32 channels, valid buffers and 1-32 local audio endpoints");
-    if (settings.clock_source != "internal")
-      throw std::runtime_error(
-          "PTP clocking is not available; select Internal. No clock-lock state is simulated.");
+    if (settings.clock_source != "internal" && settings.clock_source != "ptp-monitor")
+      throw std::runtime_error("PTP audio discipline is not implemented; select Internal or PTPv2 "
+                               "monitor for measurements");
     std::set<int> tx_mapped;
     std::set<std::string> ids, devices;
     for (const auto& e : settings.endpoints) {
@@ -189,6 +191,8 @@ struct Engine::Impl {
     c.latency_ms = settings.latency_ms;
     c.tx_names = settings.tx_names;
     c.rx_names = settings.rx_names;
+    c.clock_source = settings.clock_source;
+    c.ptp_domain = settings.ptp_domain;
     c.capture = [this](std::span<Pcm> p) { return capture(p); };
     c.playback = [this](std::span<const Pcm> p) { playback(p); };
     session = std::make_unique<AudioSession>(std::move(c));

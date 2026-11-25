@@ -121,7 +121,7 @@ Options device_options(Options options) {
   return options;
 }
 void help() {
-  std::cout << R"(OpenAoIP 0.6.0 | C++20 audio-over-IP prototype
+  std::cout << R"(OpenAoIP 0.6.1 | C++20 audio-over-IP prototype
 
   openaoip demo [--port 3210]
   openaoip controller [--host 127.0.0.1] [--port 3210]

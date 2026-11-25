@@ -16,6 +16,7 @@ struct Settings {
               interface_ip = "0.0.0.0", clock_source = "internal";
   int tx_channels = 8, rx_channels = 8, rate = 48000, buffer_frames = 256, latency_ms = 60,
       local_latency_ms = 20;
+  int ptp_domain = 0;
   std::vector<std::string> tx_names, rx_names;
   std::vector<Endpoint> endpoints;
 };

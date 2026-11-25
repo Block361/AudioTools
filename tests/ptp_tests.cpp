@@ -1,0 +1,271 @@
+// SPDX-License-Identifier: MIT
+#include "aoip/ptp.hpp"
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <iostream>
+#include <thread>
+using namespace aoip;
+using namespace aoip::ptp;
+using namespace std::chrono_literals;
+constexpr Time second = 1000000000, base = 1700000000LL * second;
+#define CHECK(x)                                                                                   \
+  do {                                                                                             \
+    if (!(x))                                                                                      \
+      throw std::runtime_error(std::string("Check failed at ") + std::to_string(__LINE__) + ": " + \
+                               #x);                                                                \
+  } while (false)
+template <class F> void rejects(F f) {
+  bool rejected = false;
+  try {
+    f();
+  } catch (const std::exception&) {
+    rejected = true;
+  }
+  CHECK(rejected);
+}
+template <class F> void eventually(F f) {
+  const auto end = monotonic_ms() + 5000;
+  do {
+    if (f())
+      return;
+    std::this_thread::sleep_for(10ms);
+  } while (monotonic_ms() < end);
+  throw std::runtime_error("PTP transport condition timed out");
+}
+PortIdentity id(std::uint8_t n) {
+  PortIdentity p;
+  p.clock = {2, 0, 0, 0, 0, 0, 0, n};
+  return p;
+}
+Message announce(PortIdentity source, int domain = 0) {
+  Message m;
+  m.type = Type::Announce;
+  m.source = source;
+  m.grandmaster = source.clock;
+  m.domain = std::uint8_t(domain);
+  m.flags = 0x0c;
+  m.utc_offset = 37;
+  m.interval = 0;
+  return m;
+}
+Message wire(const Message& m) {
+  return decode(encode(m));
+}
+void codec_test() {
+  for (auto type : {Type::Sync, Type::DelayReq, Type::FollowUp, Type::DelayResp, Type::Announce}) {
+    Message m = announce(id(2), 127);
+    m.type = type;
+    m.requesting = id(1);
+    m.sequence = 65535;
+    m.correction_ns = -1234567;
+    m.timestamp_ns = base + 123456789;
+    m.steps = 3;
+    auto p = encode(m);
+    CHECK(p.size() == (type == Type::Announce ? 64 : type == Type::DelayResp ? 54 : 44));
+    const auto decoded = decode(p);
+    CHECK(decoded.type == type && decoded.source == m.source && decoded.sequence == 65535 &&
+          decoded.domain == 127 && decoded.correction_ns == m.correction_ns &&
+          decoded.timestamp_ns == m.timestamp_ns);
+    if (type == Type::DelayResp)
+      CHECK(decoded.requesting == m.requesting);
+    if (type == Type::Announce)
+      CHECK(decoded.utc_offset == 37 && decoded.grandmaster == m.grandmaster && decoded.steps == 3);
+    for (std::size_t n = 0; n < p.size(); ++n)
+      rejects([&] { decode(std::span(p.data(), n)); });
+  }
+  auto valid = encode(announce(id(2)));
+  auto bad = valid;
+  bad[1] = 1;
+  rejects([&] { decode(bad); });
+  bad = valid;
+  bad[0] |= 0x10;
+  rejects([&] { decode(bad); });
+  bad = valid;
+  bad[0] = 13;
+  rejects([&] { decode(bad); });
+  bad = valid;
+  bad[40] = bad[41] = bad[42] = bad[43] = 255;
+  rejects([&] { decode(bad); });
+  bad = valid;
+  bad[28] = bad[29] = 0;
+  rejects([&] { decode(bad); });
+  auto tlv = valid;
+  tlv.insert(tlv.end(), {0, 8, 0, 2, 0, 0});
+  tlv[3] = std::uint8_t(tlv.size());
+  CHECK(decode(tlv).type == Type::Announce);
+  tlv[67] = 3;
+  rejects([&] { decode(tlv); });
+  // Inspect fixed wire offsets independently from our round-trip encoder.
+  const Bytes raw = {0, 2, 0, 44, 0, 0, 2, 0, 0,    0,    0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 2, 0,
+                     0, 0, 0, 0,  0, 2, 0, 1, 0x12, 0x34, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 3};
+  const auto decoded = decode(raw);
+  CHECK(decoded.timestamp_ns == 2 * second + 3 && decoded.sequence == 0x1234 &&
+        decoded.correction_ns == 1 && (decoded.flags & 0x0200));
+}
+void exchange(Tracker& tracker, PortIdentity master, Time at, Time offset, Time delay, int seq,
+              bool two_step, bool reordered = false) {
+  tracker.receive(wire(announce(master)), "127.0.0.1", at - 1000000);
+  Message sync;
+  sync.source = master;
+  sync.sequence = std::uint16_t(seq);
+  sync.flags = two_step ? 0x0200 : 0;
+  sync.correction_ns = -500;
+  sync.timestamp_ns = at - delay + offset - (two_step ? 1000 : -500);
+  Message follow = sync;
+  follow.type = Type::FollowUp;
+  follow.flags = 0;
+  follow.correction_ns = 1500;
+  if (reordered)
+    tracker.receive(wire(follow), "127.0.0.1", at - 500000);
+  auto initial = sync;
+  if (two_step)
+    initial.timestamp_ns = 0;
+  tracker.receive(wire(initial), "127.0.0.1", at);
+  if (two_step && !reordered)
+    tracker.receive(wire(follow), "127.0.0.1", at + 10000);
+  const auto request = tracker.delay_request(at + 20000000);
+  CHECK(request);
+  Message response;
+  response.type = Type::DelayResp;
+  response.source = master;
+  response.requesting = request->source;
+  response.sequence = request->sequence;
+  response.correction_ns = 4000;
+  response.timestamp_ns = at + 20000000 + delay + offset + response.correction_ns;
+  const auto before = tracker.status(at).at("samples");
+  auto foreign = response;
+  foreign.requesting = id(99);
+  tracker.receive(wire(foreign), "127.0.0.1", at + 21000000);
+  CHECK(tracker.status(at).at("samples") == before);
+  tracker.receive(wire(response), "127.0.0.1", at + 21000000);
+  const auto after = tracker.status(at + 21000000);
+  CHECK(after.at("samples").get<int>() == before.get<int>() + 1);
+  CHECK(std::abs(after.at("rawOffsetNs").get<Time>() - offset) <= 1);
+  CHECK(std::abs(after.at("pathDelayNs").get<Time>() - delay) <= 1);
+  tracker.receive(wire(response), "127.0.0.1", at + 22000000);
+  CHECK(tracker.status(at + 22000000).at("samples") == after.at("samples"));
+}
+void tracker_test() {
+  Tracker tracker(id(1), 0);
+  CHECK(!tracker.delay_request(base));
+  CHECK(tracker.status(base).at("offsetNs").is_null());
+  const Time offset = 37 * second - 5000000, delay = 120000;
+  for (int i = 0; i < 10; ++i)
+    exchange(tracker, id(2), base + i * second, offset, delay, 65530 + i, i % 2 == 0, i % 4 == 0);
+  auto s = tracker.status(base + 9 * second + 30000000);
+  CHECK(s.at("trackingStable") == true);
+  CHECK(s.at("offsetNs") == -5000000);
+  CHECK(s.at("locked") == false && s.at("audioLocked") == false && s.at("synchronized") == false);
+  CHECK(std::abs(s.at("frequencyPpm").get<double>()) < .001);
+  tracker.tick(base + 13 * second);
+  s = tracker.status(base + 13 * second);
+  CHECK(s.at("trackingStable") == false && s.at("masterAddress").is_null());
+  exchange(tracker, id(2), base + 14 * second, offset, delay, 12, true);
+  CHECK(tracker.status(base + 14 * second + 30000000).at("windowSamples") == 1);
+  auto better = announce(id(3));
+  better.priority1 = 10;
+  tracker.receive(wire(better), "127.0.0.2", base + 14 * second + 40000000);
+  s = tracker.status(base + 14 * second + 40000000);
+  CHECK(s.at("grandmasterIdentity") == "0200000000000003" && s.at("windowSamples") == 0);
+  CHECK(!tracker.delay_request(base + 14 * second + 50000000));
+  auto wrong = better;
+  wrong.domain = 1;
+  wrong.priority1 = 1;
+  wrong.source = id(4);
+  tracker.receive(wire(wrong), "127.0.0.4", base + 14 * second + 60000000);
+  CHECK(tracker.status(base + 14 * second + 60000000).at("grandmasterIdentity") ==
+        "0200000000000003");
+  Tracker frequency(id(1), 0);
+  for (int i = 0; i < 16; ++i)
+    exchange(frequency, id(2), base + i * second, offset + i * 50000, delay, i, true);
+  s = frequency.status(base + 15 * second + 30000000);
+  CHECK(std::abs(s.at("frequencyPpm").get<double>() - 50.) < .001);
+  exchange(frequency, id(2), base + 16 * second, offset + 2 * second, delay, 16, true);
+  CHECK(frequency.status(base + 16 * second + 30000000).at("clockSteps") == 1);
+  CHECK(frequency.status(base + 16 * second + 30000000).at("windowSamples") == 1);
+  Tracker stale(id(1), 0);
+  exchange(stale, id(2), base, offset, delay, 1, true);
+  stale.receive(wire(announce(id(2))), "127.0.0.1", base + 2 * second);
+  stale.tick(base + 3100000000LL);
+  CHECK(stale.status(base + 3100000000LL).at("state") == "PTP data stale");
+  CHECK(stale.status(base + 3100000000LL).at("measurementFresh") == false);
+  Tracker timeout(id(1), 0);
+  timeout.receive(wire(announce(id(2))), "127.0.0.1", base);
+  Message waiting;
+  waiting.source = id(2);
+  waiting.timestamp_ns = base + offset - delay;
+  timeout.receive(wire(waiting), "127.0.0.1", base);
+  CHECK(timeout.delay_request(base + 20000000));
+  timeout.tick(base + 2500000000LL);
+  CHECK(timeout.status(base + 2500000000LL).at("delayTimeouts") == 1);
+  rejects([] { Tracker invalid(id(1), 256); });
+}
+void transport_test() {
+  UdpSocket master(0, "127.0.0.1");
+  Options o;
+  o.interface_ip = "127.0.0.1";
+  o.event_port = o.general_port = 0;
+  o.destination_event_port = master.port();
+  o.multicast = false;
+  Monitor monitor(o);
+  auto malformed = Bytes{0, 1, 2};
+  master.send(malformed, "127.0.0.1", monitor.general_port());
+  const auto a = announce(id(2));
+  master.send(encode(a), "127.0.0.1", monitor.general_port());
+  eventually([&] { return monitor.status().at("masterAddress") == "127.0.0.1"; });
+  Message sync;
+  sync.source = id(2);
+  sync.timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          std::chrono::system_clock::now().time_since_epoch())
+                          .count() +
+                      37 * second;
+  master.send(encode(sync), "127.0.0.1", monitor.event_port());
+  std::optional<UdpSocket::Datagram> datagram;
+  eventually([&] {
+    datagram = master.receive_from();
+    return bool(datagram);
+  });
+  const auto request = decode(datagram->data);
+  CHECK(request.type == Type::DelayReq && datagram->received_ns > 0);
+  Message response;
+  response.type = Type::DelayResp;
+  response.source = id(2);
+  response.requesting = request.source;
+  response.sequence = request.sequence;
+  response.timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count() +
+                          37 * second;
+  master.send(encode(response), "127.0.0.1", monitor.general_port());
+  eventually([&] { return monitor.status().at("samples").get<int>() == 1; });
+  const auto s = monitor.status();
+  CHECK(s.at("malformedPackets").get<int>() == 1 && s.at("audioLocked") == false &&
+        s.at("offsetNs").is_number());
+  CHECK(s.at("pathDelayNs").get<Time>() < second);
+  auto shared1 = shared_monitor(o), shared2 = shared_monitor(o);
+  CHECK(shared1 == shared2);
+  auto conflicting = o;
+  conflicting.domain = 1;
+  rejects([&] { shared_monitor(conflicting); });
+  std::weak_ptr<Monitor> ownership = shared1;
+  shared1.reset();
+  shared2.reset();
+  CHECK(ownership.expired());
+  CHECK(shared_monitor(conflicting)->status().at("domain") == 1);
+}
+int main() {
+  try {
+    NetworkRuntime network;
+    codec_test();
+    tracker_test();
+    transport_test();
+    std::cout << "PASS PTPv2 wire fixtures, signed corrections, one/two-step and reordered Sync, "
+                 "E2E delay, UTC offset, 50 ppm tracking, master timeout/change, foreign response "
+                 "rejection and actual loopback UDP exchange; audio lock remains false\n";
+    return 0;
+  } catch (const std::exception& e) {
+    std::cerr << "FAIL " << e.what() << '\n';
+    return 1;
+  }
+}

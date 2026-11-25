@@ -6,6 +6,7 @@ function(openaoip_installer kind app)
   set(payloads "$<TARGET_FILE:${app}>|$<TARGET_FILE_NAME:${app}>" "${CMAKE_SOURCE_DIR}/WINDOWS-START.md|WINDOWS-START.md"
     "${CMAKE_SOURCE_DIR}/WINDOWS-AUDIO.md|WINDOWS-AUDIO.md"
     "${CMAKE_SOURCE_DIR}/ARCHITECTURE.md|ARCHITECTURE.md"
+    "${CMAKE_SOURCE_DIR}/PTP.md|PTP.md"
     "${CMAKE_SOURCE_DIR}/LICENSE|LICENSE" "${CMAKE_SOURCE_DIR}/THIRD_PARTY.md|THIRD_PARTY.md"
     "${CMAKE_SOURCE_DIR}/drivers/wdm/README.md|drivers/wdm/README.md")
   list(APPEND payloads "${CMAKE_SOURCE_DIR}/drivers/wdm/VM-TEST.md|drivers/wdm/VM-TEST.md")
@@ -57,11 +58,15 @@ function(openaoip_installer kind app)
     install(FILES "${source}" DESTINATION "${destination}" RENAME "${name}" COMPONENT ${kind})
   endforeach()
   set(generated "${CMAKE_BINARY_DIR}/installer-${kind}/$<CONFIG>")
+  set(setup_icon "${CMAKE_SOURCE_DIR}/src/native/assets/openaoip.ico")
+  if(kind STREQUAL "Controller")
+    set(setup_icon "${CMAKE_SOURCE_DIR}/src/native/assets/controller.ico")
+  endif()
   file(GENERATE OUTPUT "${generated}/payload.txt" CONTENT "${contents}")
   add_custom_command(OUTPUT "${generated}/payload.rc"
     COMMAND ${CMAKE_COMMAND} "-DMANIFEST=${generated}/payload.txt" "-DOUTPUT=${generated}/payload.rc"
-      "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}" -P "${CMAKE_SOURCE_DIR}/cmake/installer_payload.cmake"
-    DEPENDS ${dependencies} "${generated}/payload.txt" "${CMAKE_SOURCE_DIR}/cmake/installer_payload.cmake" VERBATIM)
+      "-DSOURCE_ROOT=${CMAKE_SOURCE_DIR}" "-DICON=${setup_icon}" -P "${CMAKE_SOURCE_DIR}/cmake/installer_payload.cmake"
+    DEPENDS ${dependencies} "${generated}/payload.txt" "${CMAKE_SOURCE_DIR}/cmake/installer_payload.cmake" "${setup_icon}" VERBATIM)
   add_executable(OpenAoIP${kind}Setup WIN32 src/native/setup.cpp "${generated}/payload.rc")
   target_compile_definitions(OpenAoIP${kind}Setup PRIVATE UNICODE _UNICODE "OPENAOIP_PRODUCT=L\"${kind}\"")
   target_compile_options(OpenAoIP${kind}Setup PRIVATE /utf-8 /EHsc)

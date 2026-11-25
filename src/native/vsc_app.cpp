@@ -4,6 +4,7 @@
 #include "aoip/vsc_engine.hpp"
 #include "aoip/wdm_client.hpp"
 #include "app_window.hpp"
+#include "clock_view.hpp"
 #include <commdlg.h>
 #include <shellapi.h>
 namespace {
@@ -24,7 +25,8 @@ enum Id {
   DeviceName,
   WindowsSettings,
   Buffer,
-  OpenBridge
+  OpenBridge,
+  PtpDomain
 };
 class SoundcardWindow final : public AppWindow {
 public:
@@ -104,7 +106,9 @@ public:
     add_combo(SampleRate, rates);
     add_combo(Latency, latencies);
     add_combo(Buffer, buffers);
-    add_combo(Clock, {L"Internal / free running", L"PTPv2 · not implemented"});
+    add_combo(Clock, {L"Internal", L"PTP monitor"}, settings.clock_source == "ptp-monitor" ? 1 : 0);
+    add(PtpDomain, L"EDIT", std::to_wstring(settings.ptp_domain), WS_BORDER | ES_NUMBER);
+    SendMessageW(controls[PtpDomain], EM_SETLIMITTEXT, 3, 0);
     value(TxChannels, channel_values, settings.tx_channels);
     value(RxChannels, channel_values, settings.rx_channels);
     value(SampleRate, rate_values, settings.rate);
@@ -143,7 +147,8 @@ public:
     position(SampleRate, {148, 340, half, 28});
     position(Buffer, {158 + half, 340, half, 28});
     position(Latency, {148, 396, half, 28});
-    position(Clock, {158 + half, 396, half, 28});
+    position(Clock, {158 + half, 396, half - 58, 28});
+    position(PtpDomain, {form - 50, 396, 50, 28});
     position(Start, {12, 65, 105, 28});
     position(Register, {125, 65, 150, 28});
     position(WindowsSettings, {283, 65, 139, 28});
@@ -159,6 +164,7 @@ public:
       value(SampleRate, rate_values, 48000);
     EnableWindow(controls[SampleRate], !active && !windows_mode());
     EnableWindow(controls[Buffer], !active && !windows_mode());
+    EnableWindow(controls[PtpDomain], !active && selection(Clock) == 1);
     set_text(controls[Start], active ? L"Stop" : L"Start");
     set_text(controls[Register], windows_mode() ? L"Install WDM driver" : L"Register ASIO");
     EnableWindow(controls[Register], !active && (windows_mode() || !asio_registered()));
@@ -174,7 +180,8 @@ public:
     settings.rate = rate_values.at(selection(SampleRate));
     settings.buffer_frames = buffer_values.at(selection(Buffer));
     settings.latency_ms = latency_values.at(selection(Latency));
-    settings.clock_source = selection(Clock) == 0 ? "internal" : "ptp";
+    settings.clock_source = selection(Clock) == 0 ? "internal" : "ptp-monitor";
+    settings.ptp_domain = ptp_domain(controls[PtpDomain]);
   }
   void timer() override {
     if (preview)
@@ -210,7 +217,7 @@ public:
     update_controls();
   }
   void command(int id, int notice) override {
-    if (id == Api && notice == CBN_SELCHANGE) {
+    if ((id == Api || id == Clock) && notice == CBN_SELCHANGE) {
       update_controls();
       return;
     }
@@ -320,18 +327,21 @@ public:
     text(dc, {158 + half, 319, half, 18},
          windows_mode() ? L"Buffer: Windows controlled" : L"Preferred ASIO buffer", 10, muted);
     text(dc, {148, 375, half, 18}, L"Network latency", 10, muted);
-    text(dc, {158 + half, 375, half, 18}, L"Clock source", 10, muted);
+    text(dc, {158 + half, 375, half - 58, 18}, L"Clock source", 10, muted);
+    text(dc, {form - 50, 375, 50, 18}, L"Domain", 10, muted);
     const int x = form + 38;
     int y = 108;
     text(dc, {x, y, width - x - 14, 26}, L"STATUS / DIAGNOSTICS", 11, ink, FW_SEMIBOLD);
     y += 34;
     const int rate = live.value("sampleRate", settings.rate);
     const bool locked = live.value("synchronized", false);
+    const auto clock = live.value("clock", Json::object());
+    const bool monitoring = clock.value("source", settings.clock_source) == "ptp-monitor";
     std::vector<std::pair<std::wstring, std::wstring>> rows = {
         {L"Network", connected ? L"Connected"
                      : active  ? L"Waiting for controller"
                                : L"Not connected"},
-        {L"Clock", locked ? L"Locked" : L"Free running · not PTP locked"},
+        {L"Audio clock", locked ? L"Locked" : L"Free running"},
         {L"Sample rate", std::to_wstring(rate) + L" Hz"},
         {L"Active TX / RX",
          std::to_wstring(active ? live.value("txChannels", settings.tx_channels) : 0) + L" / " +
@@ -350,12 +360,22 @@ public:
         {L"Host buffer", live.value("activeBufferFrames", 0) > 0
                              ? std::to_wstring(live.value("activeBufferFrames", 0)) + L" frames"
                              : L"No ASIO buffers open"}};
+    if (monitoring) {
+      rows.push_back({L"PTP monitor", wide(clock.value("state", "Stopped"))});
+      rows.push_back({L"PTP offset / delay",
+                      clock_value(clock, "offsetNs") + L" / " + clock_value(clock, "pathDelayNs")});
+      rows.push_back({L"PTP grandmaster", clock.value("grandmasterIdentity", Json()).is_string()
+                                              ? wide(clock.at("grandmasterIdentity"))
+                                              : L"Waiting for external GM"});
+    }
     for (const auto& row : rows) {
+      if (y + 26 > height - 33)
+        break;
       text(dc, {x, y, 118, 26}, row.first, 11, muted);
       text(dc, {x + 120, y, width - x - 132, 26}, row.second, 11,
-           row.first == L"Clock"     ? locked ? green : gray
-           : row.first == L"Network" ? connected ? green : gray
-                                     : ink);
+           row.first == L"Audio clock" ? locked ? green : gray
+           : row.first == L"Network"   ? connected ? green : gray
+                                       : ink);
       y += 28;
     }
     if (height > 530) {
@@ -370,10 +390,15 @@ public:
               i < int(tx.size()) ? tx[i].get<float>() : 0.f);
       }
       text(dc, {12, base + 82, form - 12, 38},
-           L"ASIO: host chooses the active buffer. WDM: fixed stereo pairs at 48 kHz.\nPTP is not "
-           L"available; no Clock Locked state is fabricated.",
+           L"PTPv2 monitor measures an external grandmaster. Audio stays free "
+           L"running.\nDouble-click the status area for clock details.",
            10, muted, FW_NORMAL, DT_WORDBREAK);
     }
+  }
+  void click(int x, int y, bool edit) override {
+    if (edit && x > std::max(360, width * 53 / 100) && y > 108)
+      MessageBoxW(window, clock_details(live.value("clock", Json::object())).c_str(),
+                  L"OpenAoIP · Clock details", MB_OK | MB_ICONINFORMATION);
   }
 };
 } // namespace

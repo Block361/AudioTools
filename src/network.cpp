@@ -70,10 +70,21 @@ struct UdpSocket::Impl {
       close_socket(socket);
   }
 };
-UdpSocket::UdpSocket(int port, const std::string& host) : impl_(std::make_unique<Impl>()) {
+UdpSocket::UdpSocket(int port, const std::string& host, bool exclusive)
+    : impl_(std::make_unique<Impl>()) {
   impl_->socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (impl_->socket == invalid_socket)
     throw std::runtime_error("Cannot create UDP socket");
+#ifdef _WIN32
+  if (exclusive) {
+    const int enabled = 1;
+    if (setsockopt(impl_->socket, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                   reinterpret_cast<const char*>(&enabled), sizeof(enabled)) != 0)
+      throw std::runtime_error("Cannot claim exclusive UDP socket ownership");
+  }
+#else
+  (void)exclusive; // No SO_REUSEADDR/PORT is enabled, so UDP binding remains exclusive.
+#endif
   const auto a = address(host, port);
   if (::bind(impl_->socket, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) != 0)
     throw std::runtime_error("Cannot bind UDP " + host + ":" + std::to_string(port));
@@ -119,6 +130,24 @@ void UdpSocket::enable_broadcast() {
                  sizeof(enabled)) != 0)
     throw std::runtime_error("Cannot enable network discovery broadcast");
 }
+void UdpSocket::join_multicast(const std::string& group, const std::string& interface_ip) {
+  ip_mreq membership{};
+  if (inet_pton(AF_INET, group.c_str(), &membership.imr_multiaddr) != 1 ||
+      inet_pton(AF_INET, interface_ip.c_str(), &membership.imr_interface) != 1)
+    throw std::runtime_error("Invalid IPv4 multicast interface");
+  if (setsockopt(impl_->socket, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+                 reinterpret_cast<const char*>(&membership), sizeof(membership)) != 0 ||
+      setsockopt(impl_->socket, IPPROTO_IP, IP_MULTICAST_IF,
+                 reinterpret_cast<const char*>(&membership.imr_interface),
+                 sizeof(membership.imr_interface)) != 0)
+    throw std::runtime_error("Cannot join PTP multicast on the selected interface");
+  const int ttl = 1, loop = 0;
+  if (setsockopt(impl_->socket, IPPROTO_IP, IP_MULTICAST_TTL, reinterpret_cast<const char*>(&ttl),
+                 sizeof(ttl)) != 0 ||
+      setsockopt(impl_->socket, IPPROTO_IP, IP_MULTICAST_LOOP, reinterpret_cast<const char*>(&loop),
+                 sizeof(loop)) != 0)
+    throw std::runtime_error("Cannot configure PTP multicast transport");
+}
 std::optional<UdpSocket::Datagram> UdpSocket::receive_from() {
   // A full datagram buffer lets malformed oversized packets be rejected by the
   // RTP decoder without making Windows recvfrom fail with WSAEMSGSIZE.
@@ -134,17 +163,26 @@ std::optional<UdpSocket::Datagram> UdpSocket::receive_from() {
                                                reinterpret_cast<sockaddr*>(&source), &source_size));
   if (length < 0) {
 #ifdef _WIN32
-    if (WSAGetLastError() == WSAEWOULDBLOCK)
+    const auto error = WSAGetLastError();
+    if (error == WSAEWOULDBLOCK || error == WSAEINTR || error == WSAECONNRESET ||
+        error == WSAENETRESET)
       return std::nullopt;
 #else
-    if (errno == EAGAIN || errno == EWOULDBLOCK)
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR || errno == ECONNREFUSED)
       return std::nullopt;
 #endif
     throw std::runtime_error("UDP receive failed");
   }
+  const auto arrived = monotonic_ns();
   char host[INET_ADDRSTRLEN]{};
   inet_ntop(AF_INET, &source.sin_addr, host, sizeof(host));
-  return Datagram{Bytes(bytes.begin(), bytes.begin() + length), host, ntohs(source.sin_port)};
+  return Datagram{Bytes(bytes.begin(), bytes.begin() + length), host, ntohs(source.sin_port),
+                  arrived};
+}
+std::int64_t monotonic_ns() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
 }
 double monotonic_ms() {
   return std::chrono::duration<double, std::milli>(

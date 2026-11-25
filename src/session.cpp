@@ -1,6 +1,7 @@
 #include "aoip/session.hpp"
 #include "aoip/discovery.hpp"
 #include "aoip/network.hpp"
+#include "aoip/ptp.hpp"
 #include <atomic>
 #include <cmath>
 #include <mutex>
@@ -37,6 +38,7 @@ void float_to_pcm(std::span<const float> input, std::span<Pcm> packets, int chan
 }
 struct AudioSession::Impl {
   SessionConfig config;
+  std::shared_ptr<ptp::Monitor> ptp_monitor;
   std::atomic<bool> running{true};
   std::atomic<double> last_plan{0};
   mutable std::mutex mutex;
@@ -52,6 +54,13 @@ struct AudioSession::Impl {
       throw std::runtime_error("Invalid audio session identity, interface or channel count");
     if (config.latency_ms < 20 || config.latency_ms > 500)
       throw std::runtime_error("Network latency must be 20-500 ms");
+    if (config.ptp_domain < 0 || config.ptp_domain > 255)
+      throw std::runtime_error("PTP domain must be 0-255");
+    if (config.clock_source != "internal" && config.clock_source != "ptp-monitor")
+      throw std::runtime_error("Audio PTP clock discipline is not implemented; use Internal or the "
+                               "experimental ptp-monitor mode");
+    if (config.clock_source == "ptp-monitor")
+      ptp_monitor = ptp::shared_monitor(config.interface_ip, config.ptp_domain);
     worker = std::thread([this] { run(); });
   }
   ~Impl() {
@@ -82,6 +91,7 @@ struct AudioSession::Impl {
           c.rx_channels = config.rx_channels;
           c.tx_names = config.tx_names;
           c.rx_names = config.rx_names;
+          c.clock_status = [this] { return clock_status(); };
           c.sender.streams = (config.tx_channels + 1) / 2;
           c.receiver.inputs = (config.rx_channels + 1) / 2;
           c.sender.rate = c.receiver.rate = config.rate;
@@ -115,6 +125,13 @@ struct AudioSession::Impl {
       retired = std::move(node);
     }
     retired.reset();
+  }
+  Json clock_status() const {
+    if (ptp_monitor)
+      return ptp_monitor->status();
+    return {{"source", "internal"},  {"mode", "Internal / software"}, {"locked", false},
+            {"synchronized", false}, {"audioLocked", false},          {"ptpAvailable", false},
+            {"ptpSupported", true},  {"trackingStable", false},       {"state", "Free running"}};
   }
   Json status() const {
     std::lock_guard lock(mutex);
@@ -162,11 +179,7 @@ struct AudioSession::Impl {
             {"packetLoss", lost},
             {"latePackets", late},
             {"sendErrors", send_errors},
-            {"clock",
-             {{"source", "internal"},
-              {"locked", false},
-              {"ptpAvailable", false},
-              {"state", "Free running"}}},
+            {"clock", clock_status()},
             {"device", d}};
   }
 };
