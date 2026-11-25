@@ -55,7 +55,8 @@ struct Engine::Impl {
       throw std::runtime_error("Invalid virtual channel count or sample rate");
     if (settings.backend != "asio" && settings.backend != "wdm")
       throw std::runtime_error("Unknown Windows audio backend");
-    if (settings.clock_source != "internal" && settings.clock_source != "ptp-monitor")
+    if (settings.clock_source != "internal" && settings.clock_source != "ptp-monitor" &&
+        settings.clock_source != "ptp-grandmaster")
       throw std::runtime_error("PTP audio discipline is not implemented; select Internal or PTPv2 "
                                "monitor for measurements");
     if (settings.buffer_frames < 64 || settings.buffer_frames > 1024 ||

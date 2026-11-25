@@ -106,7 +106,8 @@ public:
     add_combo(SampleRate, rates);
     add_combo(Latency, latencies);
     add_combo(Buffer, buffers);
-    add_combo(Clock, {L"Internal", L"PTP monitor"}, settings.clock_source == "ptp-monitor" ? 1 : 0);
+    add_combo(Clock, {L"Internal", L"PTP monitor", L"PTP GM"},
+              ptp_selection(settings.clock_source));
     add(PtpDomain, L"EDIT", std::to_wstring(settings.ptp_domain), WS_BORDER | ES_NUMBER);
     SendMessageW(controls[PtpDomain], EM_SETLIMITTEXT, 3, 0);
     value(TxChannels, channel_values, settings.tx_channels);
@@ -164,7 +165,7 @@ public:
       value(SampleRate, rate_values, 48000);
     EnableWindow(controls[SampleRate], !active && !windows_mode());
     EnableWindow(controls[Buffer], !active && !windows_mode());
-    EnableWindow(controls[PtpDomain], !active && selection(Clock) == 1);
+    EnableWindow(controls[PtpDomain], !active && selection(Clock) > 0);
     set_text(controls[Start], active ? L"Stop" : L"Start");
     set_text(controls[Register], windows_mode() ? L"Install WDM driver" : L"Register ASIO");
     EnableWindow(controls[Register], !active && (windows_mode() || !asio_registered()));
@@ -180,7 +181,7 @@ public:
     settings.rate = rate_values.at(selection(SampleRate));
     settings.buffer_frames = buffer_values.at(selection(Buffer));
     settings.latency_ms = latency_values.at(selection(Latency));
-    settings.clock_source = selection(Clock) == 0 ? "internal" : "ptp-monitor";
+    settings.clock_source = ptp_source(selection(Clock));
     settings.ptp_domain = ptp_domain(controls[PtpDomain]);
   }
   void timer() override {
@@ -336,7 +337,7 @@ public:
     const int rate = live.value("sampleRate", settings.rate);
     const bool locked = live.value("synchronized", false);
     const auto clock = live.value("clock", Json::object());
-    const bool monitoring = clock.value("source", settings.clock_source) == "ptp-monitor";
+    const bool monitoring = ptp_selection(clock.value("source", settings.clock_source)) > 0;
     std::vector<std::pair<std::wstring, std::wstring>> rows = {
         {L"Network", connected ? L"Connected"
                      : active  ? L"Waiting for controller"
@@ -361,7 +362,7 @@ public:
                              ? std::to_wstring(live.value("activeBufferFrames", 0)) + L" frames"
                              : L"No ASIO buffers open"}};
     if (monitoring) {
-      rows.push_back({L"PTP monitor", wide(clock.value("state", "Stopped"))});
+      rows.push_back({L"PTP status", wide(clock.value("state", "Stopped"))});
       rows.push_back({L"PTP offset / delay",
                       clock_value(clock, "offsetNs") + L" / " + clock_value(clock, "pathDelayNs")});
       rows.push_back({L"PTP grandmaster", clock.value("grandmasterIdentity", Json()).is_string()
@@ -390,7 +391,7 @@ public:
               i < int(tx.size()) ? tx[i].get<float>() : 0.f);
       }
       text(dc, {12, base + 82, form - 12, 38},
-           L"PTPv2 monitor measures an external grandmaster. Audio stays free "
+           L"PTP: choose one Software GM, other PCs use Monitor. Audio stays free "
            L"running.\nDouble-click the status area for clock details.",
            10, muted, FW_NORMAL, DT_WORDBREAK);
     }

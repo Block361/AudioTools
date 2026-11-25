@@ -1,10 +1,11 @@
-# PTP-Integration – erster Schritt (0.6.1)
+# PTP – Software-Grandmaster und Monitor (0.6.2)
 
 ## Was jetzt implementiert ist
 
-**PTPv2 monitor (experimental)** ist ein echter UDP/IPv4-E2E-Monitor für einen externen
-PTP-Grandmaster. Er wird von Audio Bridge und Virtual Soundcard über dieselbe Engine benutzt.
-Er misst Zeit und Laufzeit. **Die Audio-Clock wird damit noch nicht diszipliniert.**
+Die gemeinsame Engine unterstützt einen echten **PTPv2-Software-Grandmaster** und einen
+**PTPv2-Monitor** über UDP/IPv4/E2E. Bridge und Virtual Soundcard können beide Rollen auswählen.
+Ein PC kann damit die Zeitreferenz bereitstellen, die andere PCs messen.
+**Die Audio-Clock wird damit noch nicht diszipliniert.**
 „Audio clock: Free running“, `synchronized=false` und `audioLocked=false` bleiben deshalb korrekt.
 
 - Standard-PTPv2-Nachrichten: Announce, Sync, Follow_Up, Delay_Req und Delay_Resp.
@@ -16,26 +17,40 @@ Er misst Zeit und Laufzeit. **Die Audio-Clock wird damit noch nicht disziplinier
 - Ablauf von Announce-, Sync- und Delay-Messungen; veraltete Werte werden als solche gekennzeichnet.
 - Ein gemeinsamer Monitor je Engine-Prozess: Bridge und Soundcard teilen dieselbe Schnittstelle/Domain.
 - Neue Clock-Anzeigen im Controller und Details per Doppelklick.
+- Software-GM: Announce einmal pro Sekunde, Two-Step-Sync/Follow_Up achtmal pro Sekunde und
+  Delay_Resp mit dem tatsächlichen lokalen Empfangszeitstempel auf passende Delay_Req-Nachrichten.
+- Warnung bei einem weiteren angekündigten Grandmaster in derselben Domain.
 
-Der Monitor sendet keine Announce-/Sync-Nachrichten und wird nicht selbst Grandmaster.
-Das ist keine vollständige BMCA-Ordinary-Clock-Implementierung, keine AES67-/Dante-Freigabe und
-keine Aussage über samplegenaue Synchronisation von Soundkarten.
+Die Monitor-Rolle wird nicht automatisch Grandmaster. Die GM-Rolle wird ausdrücklich ausgewählt;
+sie bleibt eine manuell festgelegte Software-Referenz. Es gibt noch keine vollständige BMCA-Wahl
+oder automatische Übernahme bei GM-Ausfall. AES67-/Dante-Kompatibilität und samplegenaue
+Synchronisation von Soundkarten werden nicht behauptet.
 
 ## Testbetrieb
 
-1. Einen externen **PTPv2-Grandmaster mit UDP/IPv4 und E2E-Delay-Mechanismus** bereitstellen.
-   Die Gegenstelle muss zum unterstützten Profil passen. Ein zweiter OpenAoIP-Monitor allein
-   ist noch kein Grandmaster. LinuxPTP ist eine mögliche unabhängige Testgegenstelle; die
-   Kompatibilität mit echter externer Hardware wurde hier noch nicht geprüft.
+1. Beide PCs auf **0.6.2** aktualisieren. Vor dem Update alle OpenAoIP-Audioanwendungen und
+   ASIO-Hosts schließen, damit auch die gemeinsame Engine aktualisiert wird.
 2. In Bridge oder Virtual Soundcard die **konkrete IPv4-Adresse des LAN-Adapters** auswählen.
    „Auto / all IPv4 interfaces“ ist im Monitor-Modus bewusst nicht zulässig.
-3. Als Clock-Auswahl **PTPv2 monitor (experimental)** und dieselbe **Domain (0–255)** wie am
-   Grandmaster wählen. Standard ist 0.
+3. Auf **genau einem PC** in der Bridge **PTPv2 grandmaster (software, experimental)** wählen.
+   In der Virtual Soundcard heißt diese Auswahl kurz **PTP GM**.
+   Auf den anderen PCs **PTPv2 monitor** bzw. **PTP monitor** wählen.
+   Überall dieselbe **Domain (0–255)** einstellen; Standard ist 0.
 4. Audio starten. Die bisherige Audioverarbeitung läuft intern freilaufend weiter.
 5. Im Controller **Clock Status** öffnen. Doppelklick auf ein Gerät zeigt Master-Adresse,
    Grandmaster-ID, Domain, Offset, Pfadlaufzeit und gemessene relative Frequenz.
    In der Bridge ist derselbe Dialog per Doppelklick auf die untere Statusfläche erreichbar,
    in der Soundcard per Doppelklick auf den rechten Statusbereich.
+
+Beispiel: **PC Sender = Software-GM**, **Laptop = Monitor**, beide Domain 0. Der Controller
+zeigt beim PC „Grandmaster (software)“ und beim Laptop nach vollständigem Austausch Messwerte.
+Beim GM selbst bleiben Offset und Pfadlaufzeit leer: Er misst nicht gegen sich selbst.
+Ein Monitor auf einem anderen PC kann diese Werte nach ein bis zwei Delay-Austauschen anzeigen.
+Die Stabilitätsbewertung benötigt mindestens acht Messungen über sechs Sekunden.
+
+Alternativ kann ein passender externer PTPv2-E2E-Grandmaster die Referenz stellen. Dann OpenAoIP
+auf Monitor stellen. LinuxPTP ist eine mögliche unabhängige Testgegenstelle; reale externe
+Hardware- und Mehr-PC-Multicast-Tests wurden hier noch nicht durchgeführt.
 
 Netzwerk: **224.0.1.129**, UDP **319** für Event- und **320** für General-Nachrichten,
 Multicast-TTL 1. Der Monitor bindet diese Ports exklusiv im üblichen Windows-Socket-Verhalten;
@@ -44,13 +59,18 @@ Bei einem Bindefehler wird der Start mit einer Fehlermeldung abgebrochen.
 Bei Bedarf die Engine für diese Ports im privaten Audio-LAN zulassen; die Software ändert
 Firewall, Windows-Time-Dienst und Sicherheitskonfiguration nicht automatisch.
 
-Bei gleichzeitiger Bridge-/Soundcard-Nutzung müssen PTP-Schnittstelle und Domain übereinstimmen.
+Bei gleichzeitiger Bridge-/Soundcard-Nutzung müssen PTP-Schnittstelle, Domain und Rolle übereinstimmen.
 Andere Kombinationen werden abgelehnt, damit kein zweiter konkurrierender Portbesitzer entsteht.
+Zwei Apps desselben PCs teilen dann eine Clock-Identität und einen tatsächlichen PTP-Sender.
+Der Controller selbst stellt keine Clock bereit. Solange mindestens eine zugehörige PTP-
+Audiositzung läuft, bleibt der gemeinsame PTP-Dienst aktiv; die letzte Stop-Aktion beendet ihn.
 
 ## Messwerte richtig lesen
 
 | Wert | Bedeutung |
 |---|---|
+| Grandmaster (software) | Announce und Two-Step-Sync wurden über UDP gesendet; kein Nachweis des Empfangs auf anderen PCs |
+| Grandmaster / other GM detected | Ein weiterer GM ist sichtbar; bei manueller Konfiguration nur einen Software-GM pro Domain betreiben |
 | Listening / Waiting for Sync | Noch kein passender Master bzw. keine vollständige Sync-Messung |
 | Measuring | Austausch läuft, Stabilitätsfenster ist noch nicht ausreichend |
 | PTP tracking stable | Mindestens 8 frische Messungen über mindestens 6 Sekunden, kleine Regressionsabweichung; kein Audio-Lock |
@@ -61,6 +81,10 @@ Andere Kombinationen werden abgelehnt, damit kein zweiter konkurrierender Portbe
 
 Der lokale Messtakt wird beim Start an UTC verankert und läuft danach monoton über QPC/steady_clock.
 Die Windows-Uhr wird nicht verändert. Spätere Windows-Uhrkorrekturen springen nicht in die Messreihe.
+Der Software-GM verwendet diesen lokalen OS/QPC-Oszillator. Er kündigt Clock-Class **248**,
+unbekannte Genauigkeit **0xFE** und Time-Source **0xA0** an. Er setzt keine GPS-/UTC-/TAI-
+Traceability-Flags und deklariert eine beliebige Zeitskala (`ptpTimescale=false`), keine
+nachgewiesene TAI-Zeit. Die Ausgangsepoche wird lediglich einmal an die lokale Windows-Zeit angelehnt.
 Wenn ein PTP-Zeitskalen-Master keinen gültigen UTC-Offset ankündigt, bleibt der umgerechnete
 Offset leer; der rohe Zeitskalenunterschied steht im Diagnose-JSON als `rawOffsetNs`.
 Bei Zeitstufen über einer Sekunde wird das Stabilitätsfenster neu aufgebaut.
@@ -72,7 +96,7 @@ Ein symmetrischer Pfad wird angenommen; Messungen mit negativer oder über einer
 mittlerer Pfadlaufzeit werden verworfen. Messfenster und Kandidaten-/Paketlisten sind begrenzt.
 
 Unterstützt wird das PTPv2-Default-Transportfeld. PTPv1, L2/gPTP, P2P, Unicast-Aushandlung,
-Authentifizierungsprofile, Grandmaster-Election und Hardware-Clock-Steuerung sind noch offen.
+Authentifizierungsprofile, automatische Grandmaster-Election und Hardware-Clock-Steuerung sind noch offen.
 Der Testbetrieb gehört in ein vertrauenswürdiges Audio-LAN.
 
 ## Konfigurationsdatei
@@ -88,6 +112,7 @@ Beide Audio-Anwendungen speichern die neuen Felder:
 ```
 
 Die übrigen bereits vorhandenen Audio-/Kanal-/Gerätefelder bleiben erforderlich.
+Für die ausdrücklich gewählte GM-Rolle gilt `"clockSource": "ptp-grandmaster"`.
 `internal` bleibt Standard. `ptp` als disziplinierte Audio-Clock wird weiterhin ausdrücklich
 abgelehnt; Monitor-Betrieb und tatsächliche Audio-Synchronisation werden nicht gleichgesetzt.
 
@@ -96,8 +121,11 @@ abgelehnt; Monitor-Betrieb und tatsächliche Audio-Synchronisation werden nicht 
 Automatisiert geprüft: feste Wire-Fixtures, Parser-Grenzen, signierte Korrekturwerte,
 One-/Two-Step, vertauschte Reihenfolge, Sequenz-Wrap, falsche Antworten, E2E-/UTC-Rechnung,
 synthetische 50-ppm-Drift, Timeout/Master-Wechsel/Zeitstufen sowie ein tatsächlicher UDP-Austausch
-über Loopback. Software-Peers sind ausschließlich Testfixtures. Außerdem wird geprüft, dass
+über Loopback. Synthetische Referenzpakete bleiben auf die isolierten Protokolltests beschränkt. Außerdem wird geprüft, dass
 die Engine denselben Monitor teilt und keine Audio-Synchronisation erfindet.
+Zusätzlich werden die tatsächlichen Engine-Implementierungen von Software-GM und Monitor gemeinsam über echte Loopback-UDP-Sockets
+getestet: erzeugte Wire-Nachrichten, Freilauf-Flags, Delay-Antworten, Domain-Filterung, Konfliktwarnung,
+GM-Ausfall und erneute Übernahme nach GM-Neustart ohne Neustart des Monitors.
 
 Noch erforderlich:
 

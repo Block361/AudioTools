@@ -215,7 +215,7 @@ public:
     choose(Buffer, buffers, settings.buffer_frames);
     choose(NetLatency, net_latencies, settings.latency_ms);
     choose(LocalLatency, local_latencies, settings.local_latency_ms);
-    select(Clock, settings.clock_source == "ptp-monitor" ? 1 : 0);
+    select(Clock, ptp_selection(settings.clock_source));
     set_text(controls[PtpDomain], std::to_wstring(settings.ptp_domain));
   }
   void created() override {
@@ -256,7 +256,8 @@ public:
     add_numbers(Buffer, buffers);
     add_numbers(NetLatency, net_latencies);
     add_numbers(LocalLatency, local_latencies);
-    add_combo(Clock, {L"Internal / drift compensated", L"PTPv2 monitor (experimental)"});
+    add_combo(Clock, {L"Internal / drift compensated", L"PTPv2 monitor (experimental)",
+                      L"PTPv2 grandmaster (software, experimental)"});
     add(PtpDomain, L"EDIT", L"0", WS_BORDER | ES_NUMBER);
     SendMessageW(controls[PtpDomain], EM_SETLIMITTEXT, 3, 0);
     add(VScroll, L"SCROLLBAR", L"", SBS_VERT);
@@ -290,7 +291,7 @@ public:
     settings.buffer_frames = buffers.at(selection(Buffer));
     settings.latency_ms = net_latencies.at(selection(NetLatency));
     settings.local_latency_ms = local_latencies.at(selection(LocalLatency));
-    settings.clock_source = selection(Clock) == 0 ? "internal" : "ptp-monitor";
+    settings.clock_source = ptp_source(selection(Clock));
     settings.ptp_domain = ptp_domain(controls[PtpDomain]);
   }
   int half() const {
@@ -345,7 +346,7 @@ public:
     EnableWindow(controls[Edit], !active && chosen >= 0 && chosen < int(settings.endpoints.size()));
     EnableWindow(controls[Remove],
                  !active && chosen >= 0 && chosen < int(settings.endpoints.size()));
-    EnableWindow(controls[PtpDomain], !active && selection(Clock) == 1);
+    EnableWindow(controls[PtpDomain], !active && selection(Clock) > 0);
     set_text(controls[Start], active ? L"Stop" : L"Start");
     update_scroll();
   }
@@ -600,13 +601,15 @@ public:
     const auto band =
         (live.value("txBitsPerSecond", 0.) + live.value("rxBitsPerSecond", 0.)) / 1000.;
     const auto clock = live.value("clock", Json::object());
-    const bool monitoring = clock.value("source", settings.clock_source) == "ptp-monitor";
+    const bool monitoring = ptp_selection(clock.value("source", settings.clock_source)) > 0;
     text(dc, {16, bottom + 10, width - 32, 25},
          L"Network: " +
              std::wstring(connected ? L"Connected"
                           : active  ? L"Waiting for controller"
                                     : L"Not connected") +
-             (monitoring ? L"   ·   PTP monitor / audio free running   ·   "
+             (monitoring ? (clock.value("source", settings.clock_source) == "ptp-grandmaster"
+                                ? L"   ·   Software GM / audio free running   ·   "
+                                : L"   ·   PTP monitor / audio free running   ·   ")
                          : L"   ·   Clock: internal / free running   ·   ") +
              std::to_wstring(static_cast<int>(band)) + L" kbit/s",
          11, connected ? green : muted);

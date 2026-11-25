@@ -46,14 +46,20 @@ try {
     $taskProbe.Start(); $taskPort = $taskProbe.LocalEndpoint.Port; $taskProbe.Stop()
     $taskController = Start-Process -FilePath (Join-Path $BinaryDirectory 'OpenAoIP Controller.exe') -ArgumentList @('--port',"$taskPort",'--data-dir',('"' + (Join-Path $taskRoot 'controller') + '"')) -WindowStyle Hidden -PassThru
     $taskUrl = "http://127.0.0.1:$taskPort"
-    Wait-Condition { try { (Invoke-RestMethod "$taskUrl/api/state" -TimeoutSec 1).version -eq '0.6.1' } catch { $false } } 'native controller HTTP startup'
+    Wait-Condition { try { (Invoke-RestMethod "$taskUrl/api/state" -TimeoutSec 1).version -eq '0.6.2' } catch { $false } } 'native controller HTTP startup'
     $taskVscFolder = Join-Path $taskRoot 'soundcard'; New-Item -ItemType Directory -Path $taskVscFolder | Out-Null
     @{id='native-ui-test';name='Native UI Test';controller=$taskUrl;interface='127.0.0.1';txChannels=2;rxChannels=2;sampleRate=48000;latencyMs=60;backend='asio'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskVscFolder 'settings.json') -Encoding UTF8
     $taskSoundcard = Start-Process -FilePath (Join-Path $BinaryDirectory 'OpenAoIP Virtual Soundcard.exe') -ArgumentList @('--data-dir',('"' + $taskVscFolder + '"'),'--engine-endpoint',('"' + $taskEndpoint + '"')) -WindowStyle Hidden -PassThru
     Wait-Condition { [NativeAoipTest]::Find($taskSoundcard.Id,'OpenAoIPVirtualSoundcardNative') -ne [IntPtr]::Zero } 'native soundcard window'
     $taskVscWindow = [NativeAoipTest]::Find($taskSoundcard.Id,'OpenAoIPVirtualSoundcardNative')
     $taskControllerWindow = [NativeAoipTest]::Find($taskController.Id,'OpenAoIPControllerNative')
+    Wait-Condition { [NativeAoipTest]::GetDlgItem($taskVscWindow,116) -ne [IntPtr]::Zero } 'soundcard clock controls ready'
     if([NativeAoipTest]::Selected($taskVscWindow,108) -ne 0 -or [NativeAoipTest]::Selected($taskVscWindow,103) -ne 1){throw 'Native combo selections were not populated'}
+    [NativeAoipTest]::Message([NativeAoipTest]::GetDlgItem($taskVscWindow,107),0x14e,2,0)
+    [NativeAoipTest]::Message($taskVscWindow,0x111,65643,0)
+    if([NativeAoipTest]::Selected($taskVscWindow,107) -ne 2 -or -not [NativeAoipTest]::IsWindowEnabled([NativeAoipTest]::GetDlgItem($taskVscWindow,116))){throw 'Soundcard software GM selector/domain unavailable'}
+    [NativeAoipTest]::Message([NativeAoipTest]::GetDlgItem($taskVscWindow,107),0x14e,0,0)
+    [NativeAoipTest]::Message($taskVscWindow,0x111,65643,0)
     [NativeAoipTest]::Message($taskVscWindow,0x111,109,0) # Start button, no ASIO registration.
     Wait-Condition { $taskState = Invoke-RestMethod "$taskUrl/api/state"; @($taskState.devices | Where-Object id -eq 'native-ui-test').Count -eq 1 } 'soundcard registration from Start button'
     [NativeAoipTest]::Message($taskControllerWindow,0x113,1,0) # Refresh matrix.
@@ -66,6 +72,12 @@ try {
     $taskBridge=Start-Process -FilePath (Join-Path $BinaryDirectory 'OpenAoIP Audio Bridge.exe') -ArgumentList @('--data-dir',('"'+$taskBridgeFolder+'"'),'--engine-endpoint',('"'+$taskEndpoint+'"')) -WindowStyle Hidden -PassThru
     Wait-Condition { [NativeAoipTest]::Find($taskBridge.Id,'OpenAoIPAudioBridgeNative') -ne [IntPtr]::Zero } 'native Audio Bridge window'
     $taskBridgeWindow=[NativeAoipTest]::Find($taskBridge.Id,'OpenAoIPAudioBridgeNative')
+    Wait-Condition { [NativeAoipTest]::GetDlgItem($taskBridgeWindow,418) -ne [IntPtr]::Zero } 'bridge clock controls ready'
+    [NativeAoipTest]::Message([NativeAoipTest]::GetDlgItem($taskBridgeWindow,416),0x14e,2,0)
+    [NativeAoipTest]::Message($taskBridgeWindow,0x111,65952,0)
+    if([NativeAoipTest]::Selected($taskBridgeWindow,416) -ne 2 -or -not [NativeAoipTest]::IsWindowEnabled([NativeAoipTest]::GetDlgItem($taskBridgeWindow,418))){throw 'Bridge software GM selector/domain unavailable'}
+    [NativeAoipTest]::Message([NativeAoipTest]::GetDlgItem($taskBridgeWindow,416),0x14e,0,0)
+    [NativeAoipTest]::Message($taskBridgeWindow,0x111,65952,0)
     [void][NativeAoipTest]::PostMessage($taskBridgeWindow,0x111,[IntPtr]401,[IntPtr]::Zero)
     Wait-Condition { [NativeAoipTest]::Find($taskBridge.Id,'OpenAoIPBridgeDeviceEditor') -ne [IntPtr]::Zero } 'native local device editor'
     [NativeAoipTest]::Message([NativeAoipTest]::Find($taskBridge.Id,'OpenAoIPBridgeDeviceEditor'),0x111,308,0)

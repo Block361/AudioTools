@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(OpenAoIP VERSION 0.6.1 LANGUAGES CXX)
+project(OpenAoIP VERSION 0.6.2 LANGUAGES CXX)
 if(WIN32 AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "OpenAoIP native applications and ASIO driver require x64. Configure with -A x64.")
 endif()

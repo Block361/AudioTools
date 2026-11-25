@@ -56,11 +56,14 @@ struct AudioSession::Impl {
       throw std::runtime_error("Network latency must be 20-500 ms");
     if (config.ptp_domain < 0 || config.ptp_domain > 255)
       throw std::runtime_error("PTP domain must be 0-255");
-    if (config.clock_source != "internal" && config.clock_source != "ptp-monitor")
+    if (config.clock_source != "internal" && config.clock_source != "ptp-monitor" &&
+        config.clock_source != "ptp-grandmaster")
       throw std::runtime_error("Audio PTP clock discipline is not implemented; use Internal or the "
                                "experimental ptp-monitor mode");
-    if (config.clock_source == "ptp-monitor")
-      ptp_monitor = ptp::shared_monitor(config.interface_ip, config.ptp_domain);
+    if (config.clock_source != "internal")
+      ptp_monitor = ptp::shared_monitor(
+          config.interface_ip, config.ptp_domain,
+          config.clock_source == "ptp-grandmaster" ? ptp::Role::Grandmaster : ptp::Role::Monitor);
     worker = std::thread([this] { run(); });
   }
   ~Impl() {

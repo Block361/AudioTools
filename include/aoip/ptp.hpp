@@ -54,10 +54,13 @@ private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
+enum class Role { Monitor, Grandmaster };
 struct Options {
   std::string interface_ip;
+  Role role = Role::Monitor;
   int domain = 0;
-  int event_port = 319, general_port = 320, destination_event_port = 319;
+  int event_port = 319, general_port = 320, destination_event_port = 319,
+      destination_general_port = 320;
   bool multicast = true; // Non-multicast/ephemeral ports are used only by explicit transport tests.
 };
 class Monitor {
@@ -73,6 +76,7 @@ private:
   std::unique_ptr<Impl> impl_;
 };
 // One selected interface/domain per process in this first integration; Bridge and VSC share it.
-std::shared_ptr<Monitor> shared_monitor(const std::string& interface_ip, int domain);
+std::shared_ptr<Monitor> shared_monitor(const std::string& interface_ip, int domain,
+                                        Role role = Role::Monitor);
 std::shared_ptr<Monitor> shared_monitor(Options options);
 } // namespace aoip::ptp

@@ -254,15 +254,115 @@ void transport_test() {
   CHECK(ownership.expired());
   CHECK(shared_monitor(conflicting)->status().at("domain") == 1);
 }
+void grandmaster_wire_test() {
+  UdpSocket events(0, "127.0.0.1"), generals(0, "127.0.0.1"), requests(0, "127.0.0.1");
+  Options o;
+  o.interface_ip = "127.0.0.1";
+  o.role = Role::Grandmaster;
+  o.multicast = false;
+  o.event_port = o.general_port = 0;
+  o.destination_event_port = events.port();
+  o.destination_general_port = generals.port();
+  Monitor gm(o);
+  std::optional<Message> a, s, f, response;
+  eventually([&] {
+    while (const auto d = events.receive_from()) {
+      const auto m = decode(d->data);
+      if (m.type == Type::Sync)
+        s = m;
+    }
+    while (const auto d = generals.receive_from()) {
+      const auto m = decode(d->data);
+      if (m.type == Type::Announce)
+        a = m;
+      else if (m.type == Type::FollowUp)
+        f = m;
+    }
+    return a && s && f && s->sequence == f->sequence;
+  });
+  CHECK(a->clock_class == 248 && a->accuracy == 254 && a->time_source == 160 && a->flags == 0 &&
+        a->grandmaster == a->source.clock);
+  CHECK(s->source == a->source && s->flags == 0x0200 && s->timestamp_ns == 0 &&
+        f->timestamp_ns > base && f->flags == 0);
+  Message req;
+  req.type = Type::DelayReq;
+  req.source = id(77);
+  req.sequence = 1234;
+  req.timestamp_ns = 42 * second;
+  req.correction_ns = 1200;
+  auto wrong = req;
+  wrong.domain = 1;
+  requests.send(encode(wrong), "127.0.0.1", gm.event_port());
+  requests.send(encode(req), "127.0.0.1", gm.event_port());
+  eventually([&] {
+    while (const auto d = generals.receive_from()) {
+      const auto m = decode(d->data);
+      if (m.type == Type::DelayResp)
+        response = m;
+    }
+    return bool(response);
+  });
+  CHECK(response->source == a->source && response->requesting == req.source &&
+        response->sequence == 1234 && response->timestamp_ns > base &&
+        response->correction_ns == 1200);
+  CHECK(gm.status().at("delayRequestsReceived") == 1 && gm.status().at("delayResponsesSent") == 1);
+  CHECK(gm.status().at("audioLocked") == false && gm.status().at("transmitting") == true);
+  const auto peer = announce(id(99));
+  requests.send(encode(peer), "127.0.0.1", gm.general_port());
+  eventually([&] { return gm.status().at("otherGrandmasters") == 1; });
+  CHECK(!gm.status().at("warning").get<std::string>().empty());
+}
+void grandmaster_recovery_test() {
+  auto reservation = std::make_unique<UdpSocket>(0, "127.0.0.1");
+  const int master_port = reservation->port();
+  Options client;
+  client.interface_ip = "127.0.0.1";
+  client.domain = 23;
+  client.multicast = false;
+  client.event_port = client.general_port = 0;
+  client.destination_event_port = master_port;
+  Monitor follower(client);
+  Options server = client;
+  server.role = Role::Grandmaster;
+  server.event_port = master_port;
+  server.destination_event_port = follower.event_port();
+  server.destination_general_port = follower.general_port();
+  reservation.reset();
+  auto gm = std::make_unique<Monitor>(server);
+  eventually([&] { return follower.status().at("samples").get<int>() >= 2; });
+  const auto before = follower.status();
+  CHECK(before.at("measurementFresh") == true && before.at("offsetNs").is_number());
+  CHECK(std::abs(before.at("offsetNs").get<Time>()) < 20000000);
+  CHECK(before.at("grandmasterIdentity") == gm->status().at("grandmasterIdentity"));
+  CHECK(before.at("ptpTimescale") == false && gm->status().at("synchronized") == false);
+  gm.reset();
+  eventually([&] { return follower.status().at("masterAddress").is_null(); });
+  CHECK(follower.status().at("measurementFresh") == false);
+  gm = std::make_unique<Monitor>(server);
+  const auto replacement = gm->status().at("grandmasterIdentity");
+  eventually([&] {
+    const auto state = follower.status();
+    return state.at("grandmasterIdentity") == replacement &&
+           state.at("samples").get<int>() > before.at("samples").get<int>();
+  });
+  CHECK(follower.status().at("audioLocked") == false);
+  auto shared1 = shared_monitor(client);
+  auto different = client;
+  different.role = Role::Grandmaster;
+  rejects([&] { shared_monitor(different); });
+}
 int main() {
   try {
     NetworkRuntime network;
     codec_test();
     tracker_test();
     transport_test();
+    grandmaster_wire_test();
+    grandmaster_recovery_test();
     std::cout << "PASS PTPv2 wire fixtures, signed corrections, one/two-step and reordered Sync, "
                  "E2E delay, UTC offset, 50 ppm tracking, master timeout/change, foreign response "
-                 "rejection and actual loopback UDP exchange; audio lock remains false\n";
+                 "rejection, software-GM Announce/Sync/FollowUp/DelayResp, live GM/monitor "
+                 "exchange and GM restart recovery; audio lock remains false\n";
     return 0;
   } catch (const std::exception& e) {
     std::cerr << "FAIL " << e.what() << '\n';

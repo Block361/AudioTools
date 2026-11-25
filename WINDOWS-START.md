@@ -1,8 +1,8 @@
-# OpenAoIP für Windows – Version 0.6.1
+# OpenAoIP für Windows – Version 0.6.2
 
 Drei eigenständige native Anwendungen: **Controller**, **Virtual Soundcard** und **Audio Bridge**.
 Sie übertragen tatsächlich Audio über RTP. Dies ist weiterhin ein Entwicklungsprototyp:
-Ein experimenteller PTPv2-Monitor misst jetzt einen externen Grandmaster. Die Audio-Clock bleibt freilaufend; samplegenaue Synchronisation und Dante-/AES67-Interoperabilität fehlen. Siehe [PTP-Testbetrieb](./PTP.md).
+Eine experimentelle PTPv2-Software-GM-Rolle stellt eine lokale Zeitreferenz für die Monitore auf anderen PCs bereit. Die Audio-Clock bleibt freilaufend; samplegenaue Synchronisation und Dante-/AES67-Interoperabilität fehlen. Siehe [PTP-Testbetrieb](./PTP.md).
 Der WDM-Kerneltreiber ist experimentell und besitzt keine Produktionsfreigabe.
 
 ## Updates installieren
@@ -12,7 +12,7 @@ Der WDM-Kerneltreiber ist experimentell und besitzt keine Produktionsfreigabe.
    Audiositzung läuft. Nach einem Absturz kann sie bei Inaktivität noch bis zu einer Minute laufen.
 2. **OpenAoIPSuiteSetup.exe** für alle drei Anwendungen ausführen. Alternativ einzeln:
    **OpenAoIPControllerSetup.exe**, **OpenAoIPVirtualSoundcardSetup.exe**, **OpenAoIPAudioBridgeSetup.exe**.
-3. Im Startmenü unter **OpenAoIP** öffnen. Oben links muss **0.6.1** stehen.
+3. Im Startmenü unter **OpenAoIP** öffnen. Oben links muss **0.6.2** stehen.
 
 Erneutes Ausführen desselben Setup-Typs aktualisiert die vorhandene Installation pro Benutzer.
 Einstellungen und Routing liegen außerhalb des Programmordners und bleiben erhalten.
@@ -95,7 +95,7 @@ Beim Start werden keine Routen angelegt. Kopfhörer bei lokalem Mikrofon-Monitor
 
 Samplerate-Konvertierung und ein adaptiver lokaler Puffer kompensieren Restdrift. Netzwerk- und
 lokaler Puffer addieren sich; ihre Werte sind keine gemessene Ende-zu-Ende-Latenz. Dies ersetzt
-keine PTP-Clock und garantiert keine Phasenkohärenz. PTPv2 monitor (experimental) erfasst optional Zeitmessungen eines externen Grandmasters. Dazu eine konkrete LAN-Adresse und die passende Domain wählen. Audio bleibt dabei Free running; siehe [PTP-Testbetrieb](./PTP.md).
+keine PTP-Clock und garantiert keine Phasenkohärenz. Auf genau einem PC PTPv2 grandmaster (software, experimental), auf den übrigen PTPv2 monitor wählen. Dazu konkrete LAN-Adressen und dieselbe Domain wählen. Audio bleibt dabei Free running; siehe [PTP-Testbetrieb](./PTP.md).
 
 ## Netzwerk, Engine und Einstellungen
 

@@ -149,7 +149,8 @@ struct Engine::Impl {
         settings.local_latency_ms < 5 || settings.local_latency_ms > 200)
       throw std::runtime_error(
           "Bridge requires 1-32 channels, valid buffers and 1-32 local audio endpoints");
-    if (settings.clock_source != "internal" && settings.clock_source != "ptp-monitor")
+    if (settings.clock_source != "internal" && settings.clock_source != "ptp-monitor" &&
+        settings.clock_source != "ptp-grandmaster")
       throw std::runtime_error("PTP audio discipline is not implemented; select Internal or PTPv2 "
                                "monitor for measurements");
     std::set<int> tx_mapped;
