@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light"><title>OpenAoIP · Network controller</title>
+  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="OpenAoIP home"><span class="brand-mark">≋</span><span>OpenAoIP<span class="brand-sub">NETWORK CONTROLLER</span></span></a>
+    <div class="workspace-label">WORKSPACE</div>
+    <nav aria-label="Controller views">
+      <button class="nav-item selected" data-view="routing"><span>⌘</span> Routing matrix</button>
+      <button class="nav-item" data-view="devices"><span>▤</span> Devices <span id="nav-count" class="count">0</span></button>
+      <button class="nav-item" data-view="activity"><span>◷</span> Activity</button>
+    </nav>
+    <div class="sidebar-bottom"><span class="version">v0.3.0 <span>C++20</span></span><p>An open connection.</p><small>Open source · MIT license</small></div>
+  </aside>
+  <div class="shell">
+    <header class="topbar"><span>Local network <span class="slash">/</span> <strong id="breadcrumb">Routing matrix</strong></span><span id="connection" class="connection"><i></i> Connecting</span></header>
+    <main>
+      <div class="page-heading"><div><div class="eyebrow">AUDIO OVER IP <span class="prototype">PROTOTYPE</span></div><h1 id="title">Network routing</h1><p id="subtitle">Connect your sources. Keep your signal moving.</p></div><div class="heading-actions"><button id="open-network" class="button secondary">Connect device</button><button id="open-hardware" class="button">Audio hardware</button><a class="button secondary" href="/api/routes/export" download="routes.json">↓ Export routes</a></div></div>
+      <section class="stats" aria-label="Network summary">
+        <div class="stat"><span>Devices online</span><strong id="stat-devices">—</strong><small id="device-detail">Waiting for endpoints</small></div>
+        <div class="stat"><span>Source streams</span><strong id="stat-streams">—</strong><small>Independent stereo pairs</small></div>
+        <div class="stat"><span>Active routes</span><strong id="stat-routes">—</strong><small id="route-detail">Saved automatically</small></div>
+        <div class="stat"><span>Audio format</span><strong class="format">48 <em>kHz</em></strong><small>16-bit PCM · 2 channels · 5 ms packets</small></div>
+      </section>
+      <section id="routing-view" class="view">
+        <div class="panel matrix-panel"><div class="panel-heading"><div><h2>Routing matrix</h2><p>Choose a source for each receiver input. Click a connection to remove it.</p></div><span class="live-label"><i></i> LIVE</span></div><div id="matrix" class="matrix-scroll"><div class="empty">Waiting for your audio devices…</div></div><div class="matrix-footer"><span><i class="legend-dot connected"></i> Connected <i class="legend-dot"></i> Available <i class="legend-dot pending"></i> Pending</span><span>One source per input · Multiple receivers per source</span></div></div>
+        <div class="section-heading"><div><h2>Receiver signals</h2><p>Levels measured from received audio. Audition the latest capture.</p></div><span class="tag">10 SECOND BUFFER</span></div>
+        <div id="signals" class="signals"></div>
+      </section>
+      <section id="devices-view" class="view" hidden><div class="panel"><div class="panel-heading"><div><h2>Registered devices</h2><p>Endpoints register with this controller and report status every 500 ms.</p></div></div><div id="devices" class="device-list"></div></div></section>
+      <section id="activity-view" class="view" hidden><div class="panel"><div class="panel-heading"><div><h2>Network activity</h2><p>The latest registrations and routing changes.</p></div></div><ol id="activity" class="activity-list"></ol></div></section>
+      <div class="notice"><span>ⓘ</span><p><strong>Audio transport prototype.</strong> Microphones, sound cards, test tones and WAV sources. Hardware audio uses native devices and software buffers. PTP synchronization and AES67 interoperability are planned.</p></div>
+    </main>
+    <footer>OpenAoIP <span>Direct device-to-device audio. Controller-managed routes.</span><span id="last-update">Waiting for controller</span></footer>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="network-dialog"><div class="dialog-heading"><div><div class="eyebrow">NETWORK ENDPOINTS</div><h2>Connect another device</h2></div><button id="close-network" class="icon-button" aria-label="Close device connection guide">×</button></div>
+    <p>Run one OpenAoIP device process on each computer. Each device registers its sending and receiving channels automatically; connect them here in the routing matrix.</p>
+    <p id="network-warning" class="error" role="status"></p>
+    <div class="network-form"><label>Controller LAN address<select id="network-address"></select></label><label>Unique device ID<input id="network-device-id" value="stage" maxlength="48" pattern="[a-zA-Z0-9_\-]+" autocomplete="off"></label><label class="checkbox-label"><input type="checkbox" id="network-test"> Test with tones instead of a microphone and speakers</label></div>
+    <p>Copy the Windows package to the other computer, open a terminal in its folder, and run:</p><pre id="network-command" tabindex="0"></pre>
+    <p class="hardware-help">Use a different ID for every device, for example stage and foh. Hardware mode uses the default input/output and one stereo pair each. For a mono microphone on channel 1, add <code>--capture-map 1,1</code>. Persistent JSON configurations are included in the examples folder.</p>
+    <p class="hardware-help">Allow controller TCP 3210 (or its configured port), receiver UDP 5004 and monitor TCP 5100 on your trusted LAN. Test mode allocates endpoint ports automatically. Audio travels directly between devices.</p>
+    <div class="dialog-footer"><span id="network-copy-status" role="status"></span><button id="copy-network-command" class="button">Copy command</button></div>
+  </dialog>
+  <dialog id="hardware-dialog"><form id="hardware-form">
+    <div class="dialog-heading"><div><div class="eyebrow">LOCAL AUDIO DEVICES</div><h2>Microphone &amp; sound card</h2></div><button type="button" id="close-hardware" class="icon-button" aria-label="Close hardware setup">×</button></div>
+    <p>Choose devices on the computer running this controller. Start them, then connect their streams in the routing matrix. Use headphones for local microphone monitoring.</p>
+    <p id="hardware-backend">Scanning audio devices…</p>
+    <fieldset id="hardware-fields">
+      <label>Microphone / capture device<select id="capture-device"><option value="">Off</option></select></label>
+      <div class="form-row"><label>Stereo streams<input id="capture-streams" type="number" min="1" max="16" value="1" required></label><label>Physical input channels<input id="capture-map" placeholder="Auto, or 1,1 for mono" autocomplete="off" aria-describedby="capture-map-help"><small id="capture-map-help">Two channel numbers per stereo stream, e.g. 1,1 for mono.</small></label></div>
+      <label>Sound card / playback device<select id="playback-device"><option value="">Off</option></select></label>
+      <div class="form-row"><label>Stereo inputs<input id="playback-inputs" type="number" min="1" max="16" value="1" required></label><label>Physical output channels<input id="playback-map" placeholder="Auto, or 1,2" autocomplete="off" aria-describedby="playback-map-help"><small id="playback-map-help">Two channel numbers per stereo input, e.g. 1,2 for left/right.</small></label></div>
+      <div class="form-row"><label>Playback volume (%)<input id="playback-volume" type="number" min="0" max="100" value="50" required></label><label>Receive buffer (ms)<input id="hardware-latency" type="number" min="20" max="500" value="60" required></label></div>
+    </fieldset>
+    <p class="hardware-help">Each stream is a stereo pair. Channel maps use two physical channel numbers per stream, for example 1,2,3,4. Saved routes reconnect when their endpoints return.</p>
+    <p id="hardware-error" class="error" role="alert"></p><p id="hardware-status" role="status"></p>
+    <div class="dialog-footer"><button id="stop-hardware" type="button" class="button secondary" disabled>Stop local audio</button><button id="start-hardware" type="submit" class="button">Start local audio</button></div>
+  </form></dialog>
+  <dialog id="audition-dialog"><div class="dialog-heading"><div><div class="eyebrow">RECEIVER CAPTURE</div><h2 id="audition-title">Listen to received audio</h2></div><button id="close-audition" class="icon-button" aria-label="Close audition">×</button></div><p>This is a snapshot of the most recent audio received, up to 10 seconds.</p><audio id="player" controls></audio><div class="dialog-footer"><a id="download-audio" class="button secondary" download>↓ Download WAV</a><button id="refresh-audio" class="button">Refresh capture</button></div><p id="audio-error" class="error" role="alert"></p></dialog>
+</body></html>

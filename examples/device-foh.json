@@ -1,0 +1,16 @@
+{
+  "id": "foh",
+  "name": "Front of house",
+  "controller": "http://192.168.1.10:3210",
+  "host": "0.0.0.0",
+  "streams": 1,
+  "inputs": 1,
+  "capture": "default",
+  "captureMap": [1, 1],
+  "playback": "default",
+  "playbackMap": [1, 2],
+  "volume": 50,
+  "port": 5004,
+  "monitorPort": 5100,
+  "latency": 60
+}

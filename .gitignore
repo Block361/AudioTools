@@ -1,0 +1,19 @@
+build/
+out/
+.openaoip/
+recordings/
+*.log
+*.pfx
+*.p12
+**/private-vm-signing/
+third_party/wdk/
+third_party/wdk-versions.json
+third_party/asio-sdk/sdk.zip
+# Only the GPL SDK headers and license needed by the ASIO component are published.
+third_party/asio-sdk/ASIOSDK/*
+!third_party/asio-sdk/ASIOSDK/common/
+!third_party/asio-sdk/ASIOSDK/LICENSE.txt
+!third_party/asio-sdk/ASIOSDK/README.md
+third_party/asio-sdk/ASIOSDK/common/*
+!third_party/asio-sdk/ASIOSDK/common/*.h
+!third_party/asio-sdk/ASIOSDK/common/LICENSE.txt
