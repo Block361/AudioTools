@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+#include "aoip/adaptive_buffer.hpp"
+#include "aoip/audio_clock.hpp"
 #include "aoip/ptp.hpp"
 #include <atomic>
 #include <chrono>
@@ -312,6 +314,69 @@ void grandmaster_wire_test() {
   eventually([&] { return gm.status().at("otherGrandmasters") == 1; });
   CHECK(!gm.status().at("warning").get<std::string>().empty());
 }
+void audio_servo_test() {
+  for (const double drift : {-500., 50., 500.}) {
+    Tracker tracker(id(1), 0);
+    AudioRateServo servo;
+    const Time offset = 37 * second - 1317725100; // Large epoch offset must not jump audio.
+    double previous = 0;
+    for (int i = 0; i < 70; ++i) {
+      exchange(tracker, id(2), base + i * second, offset + Time(i * drift * 1000), 120000, i, true);
+      const auto measured = tracker.status(base + i * second + 30000000);
+      for (int n = 0; n < 10; ++n) {
+        servo.update(measured, i + n / 10.);
+        CHECK(std::abs(servo.correction_ppm() - previous) <= 2.00001);
+        previous = servo.correction_ppm();
+      }
+    }
+    CHECK(servo.status().at("rateReferenceReady") == true);
+    CHECK(std::abs(servo.correction_ppm() - drift) < .01);
+    CHECK(servo.status().at("phaseSynchronized") == false);
+    const auto interval = disciplined_interval_ms(48000, servo.correction_ppm());
+    CHECK(std::abs(240. / interval * 1000. / 48000. - (1 + drift * 1e-6)) < 1e-8);
+    auto lost = tracker.status(base + 80 * second);
+    for (int i = 0; i < 100; ++i)
+      servo.update(lost, 70 + i * .1);
+    CHECK(servo.status().at("rateState") == "Holdover");
+    CHECK(servo.status().at("rateReferenceReady") == false);
+    CHECK(servo.correction_ppm() == previous);
+    auto invalid = lost;
+    invalid["trackingStable"] = true;
+    invalid["measurementFresh"] = true;
+    invalid["frequencyPpm"] = 1200.;
+    servo.update(invalid, 81);
+    CHECK(servo.correction_ppm() == previous);
+    // Master replacement reacquires gradually instead of resetting the clock or sample timeline.
+    invalid["grandmasterIdentity"] = "replacement";
+    invalid["frequencyPpm"] = -drift;
+    servo.update(invalid, 82);
+    CHECK(servo.status().at("rateReferenceReady") == false);
+    for (int i = 1; i < 700; ++i)
+      servo.update(invalid, 82 + i * .1);
+    CHECK(servo.status().at("rateReferenceReady") == true);
+    CHECK(std::abs(servo.correction_ppm() + drift) < .01);
+    // Two local clock domains joined by the actual continuous SRC, over 3 simulated minutes.
+    AdaptiveBuffer buffer(2, 48000, 20);
+    std::vector<float> input(484), output(480);
+    double remainder = 0;
+    std::uint64_t frame = 0;
+    for (int block = 0; block < 36000; ++block) {
+      remainder += 240 / (1 + drift * 1e-6);
+      const int count = int(remainder);
+      remainder -= count;
+      for (int f = 0; f < count; ++f) {
+        input[f * 2] = .25f * std::sin(float(frame + f) * .04f);
+        input[f * 2 + 1] = -input[f * 2];
+      }
+      frame += count;
+      buffer.write(std::span(input.data(), count * 2));
+      buffer.read(output);
+      for (int f = 0; f < 240; ++f)
+        CHECK(std::isfinite(output[f * 2]) && std::abs(output[f * 2] + output[f * 2 + 1]) < 1e-6);
+    }
+    CHECK(buffer.underruns() == 0 && buffer.dropped() == 0);
+  }
+}
 void grandmaster_recovery_test() {
   auto reservation = std::make_unique<UdpSocket>(0, "127.0.0.1");
   const int master_port = reservation->port();
@@ -356,6 +421,7 @@ int main() {
     NetworkRuntime network;
     codec_test();
     tracker_test();
+    audio_servo_test();
     transport_test();
     grandmaster_wire_test();
     grandmaster_recovery_test();

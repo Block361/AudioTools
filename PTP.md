@@ -1,146 +1,107 @@
-# PTP – Software-Grandmaster und Monitor (0.6.2)
+# PTP – Software-Audiotakt
 
-## Was jetzt implementiert ist
+Stand: OpenAoIP **0.6.3**, experimenteller Entwicklungsprototyp.
 
-Die gemeinsame Engine unterstützt einen echten **PTPv2-Software-Grandmaster** und einen
-**PTPv2-Monitor** über UDP/IPv4/E2E. Bridge und Virtual Soundcard können beide Rollen auswählen.
-Ein PC kann damit die Zeitreferenz bereitstellen, die andere PCs messen.
-**Die Audio-Clock wird damit noch nicht diszipliniert.**
-„Audio clock: Free running“, `synchronized=false` und `audioLocked=false` bleiben deshalb korrekt.
+PTPv2 liefert jetzt den **Frequenztakt für die TX- und RX-Netzwerkverarbeitung** der Bridge und
+Virtual Soundcard. Lokale Audiogeräte werden über kontinuierliche Sampleratenanpassung angebunden.
+Das ist eine Software-Frequenzregelung. Gemeinsame Präsentationszeiten, samplegenauer Start,
+Phasenkohärenz sowie Dante-/AES67-Interoperabilität sind weiterhin offen.
 
-- Standard-PTPv2-Nachrichten: Announce, Sync, Follow_Up, Delay_Req und Delay_Resp.
-- One-Step- und Two-Step-Sync, auch wenn Follow_Up vor Sync eintrifft.
-- Zuordnung über Domain, SourcePortIdentity, Sequenznummer und RequestingPortIdentity.
-- Auswahl unter empfangenen Announce-Datensätzen nach Priorität/Clock-Qualität; Ausfall/Wechsel löscht alte Messungen.
-- Berechnung von Master-Offset, mittlerer Pfadlaufzeit und relativer Frequenzabweichung.
-- Berücksichtigung der Correction Fields und des angekündigten UTC-Offsets.
-- Ablauf von Announce-, Sync- und Delay-Messungen; veraltete Werte werden als solche gekennzeichnet.
-- Ein gemeinsamer Monitor je Engine-Prozess: Bridge und Soundcard teilen dieselbe Schnittstelle/Domain.
-- Neue Clock-Anzeigen im Controller und Details per Doppelklick.
-- Software-GM: Announce einmal pro Sekunde, Two-Step-Sync/Follow_Up achtmal pro Sekunde und
-  Delay_Resp mit dem tatsächlichen lokalen Empfangszeitstempel auf passende Delay_Req-Nachrichten.
-- Warnung bei einem weiteren angekündigten Grandmaster in derselben Domain.
+## Zwei Rechner einrichten
 
-Die Monitor-Rolle wird nicht automatisch Grandmaster. Die GM-Rolle wird ausdrücklich ausgewählt;
-sie bleibt eine manuell festgelegte Software-Referenz. Es gibt noch keine vollständige BMCA-Wahl
-oder automatische Übernahme bei GM-Ausfall. AES67-/Dante-Kompatibilität und samplegenaue
-Synchronisation von Soundkarten werden nicht behauptet.
+1. Auf beiden PCs alle OpenAoIP-Audioanwendungen schließen, Suite aktualisieren und neu starten.
+2. Auf **PC Sender** als Clock Source **PTPv2 grandmaster (software, experimental)** wählen.
+3. Auf dem **Laptop** **PTPv2 follower (software, experimental)** wählen.
+4. Auf beiden die tatsächliche lokale **LAN-IPv4-Adresse** und dieselbe **PTP-Domain**, z. B. 0, einstellen.
+5. Audioquellen, Wiedergabe, gleiche Netzwerk-Samplerate und Kanalzuordnung konfigurieren; beide starten.
+6. Im Controller die Routen verbinden und **Clock Status** öffnen.
 
-## Testbetrieb
+Pro Domain genau **einen** manuell gewählten Software-GM betreiben. Automatische Grandmaster-Election
+ist noch offen. Der Controller liefert keine Clock und ist für laufendes Audio nicht erforderlich.
+Bridge und VSC auf demselben PC teilen einen PTP-Dienst; Schnittstelle, Domain und Rolle müssen
+übereinstimmen. Die letzte zugehörige Audiositzung beendet den Dienst.
 
-1. Beide PCs auf **0.6.2** aktualisieren. Vor dem Update alle OpenAoIP-Audioanwendungen und
-   ASIO-Hosts schließen, damit auch die gemeinsame Engine aktualisiert wird.
-2. In Bridge oder Virtual Soundcard die **konkrete IPv4-Adresse des LAN-Adapters** auswählen.
-   „Auto / all IPv4 interfaces“ ist im Monitor-Modus bewusst nicht zulässig.
-3. Auf **genau einem PC** in der Bridge **PTPv2 grandmaster (software, experimental)** wählen.
-   In der Virtual Soundcard heißt diese Auswahl kurz **PTP GM**.
-   Auf den anderen PCs **PTPv2 monitor** bzw. **PTP monitor** wählen.
-   Überall dieselbe **Domain (0–255)** einstellen; Standard ist 0.
-4. Audio starten. Die bisherige Audioverarbeitung läuft intern freilaufend weiter.
-5. Im Controller **Clock Status** öffnen. Doppelklick auf ein Gerät zeigt Master-Adresse,
-   Grandmaster-ID, Domain, Offset, Pfadlaufzeit und gemessene relative Frequenz.
-   In der Bridge ist derselbe Dialog per Doppelklick auf die untere Statusfläche erreichbar,
-   in der Soundcard per Doppelklick auf den rechten Statusbereich.
+Konfiguration: `clockSource: "ptp-monitor"` bezeichnet nun den Software-Follower einschließlich
+Frequenzregelung; `"ptp-grandmaster"` den GM, `"internal"` den bisherigen unabhängigen Betrieb.
+`ptpDomain` ist 0–255. Der unpräzise Wert `"ptp"` wird abgelehnt.
 
-Beispiel: **PC Sender = Software-GM**, **Laptop = Monitor**, beide Domain 0. Der Controller
-zeigt beim PC „Grandmaster (software)“ und beim Laptop nach vollständigem Austausch Messwerte.
-Beim GM selbst bleiben Offset und Pfadlaufzeit leer: Er misst nicht gegen sich selbst.
-Ein Monitor auf einem anderen PC kann diese Werte nach ein bis zwei Delay-Austauschen anzeigen.
-Die Stabilitätsbewertung benötigt mindestens acht Messungen über sechs Sekunden.
+## Anzeigen
 
-Alternativ kann ein passender externer PTPv2-E2E-Grandmaster die Referenz stellen. Dann OpenAoIP
-auf Monitor stellen. LinuxPTP ist eine mögliche unabhängige Testgegenstelle; reale externe
-Hardware- und Mehr-PC-Multicast-Tests wurden hier noch nicht durchgeführt.
-
-Netzwerk: **224.0.1.129**, UDP **319** für Event- und **320** für General-Nachrichten,
-Multicast-TTL 1. Der Monitor bindet diese Ports exklusiv im üblichen Windows-Socket-Verhalten;
-ein anderer PTP-Dienst kann das Öffnen verhindern. Es wird kein Port-Sharing erzwungen.
-Bei einem Bindefehler wird der Start mit einer Fehlermeldung abgebrochen.
-Bei Bedarf die Engine für diese Ports im privaten Audio-LAN zulassen; die Software ändert
-Firewall, Windows-Time-Dienst und Sicherheitskonfiguration nicht automatisch.
-
-Bei gleichzeitiger Bridge-/Soundcard-Nutzung müssen PTP-Schnittstelle, Domain und Rolle übereinstimmen.
-Andere Kombinationen werden abgelehnt, damit kein zweiter konkurrierender Portbesitzer entsteht.
-Zwei Apps desselben PCs teilen dann eine Clock-Identität und einen tatsächlichen PTP-Sender.
-Der Controller selbst stellt keine Clock bereit. Solange mindestens eine zugehörige PTP-
-Audiositzung läuft, bleibt der gemeinsame PTP-Dienst aktiv; die letzte Stop-Aktion beendet ihn.
-
-## Messwerte richtig lesen
-
-| Wert | Bedeutung |
+| Anzeige | Bedeutung |
 |---|---|
-| Grandmaster (software) | Announce und Two-Step-Sync wurden über UDP gesendet; kein Nachweis des Empfangs auf anderen PCs |
-| Grandmaster / other GM detected | Ein weiterer GM ist sichtbar; bei manueller Konfiguration nur einen Software-GM pro Domain betreiben |
-| Listening / Waiting for Sync | Noch kein passender Master bzw. keine vollständige Sync-Messung |
-| Measuring | Austausch läuft, Stabilitätsfenster ist noch nicht ausreichend |
-| PTP tracking stable | Mindestens 8 frische Messungen über mindestens 6 Sekunden, kleine Regressionsabweichung; kein Audio-Lock |
-| PTP data stale / Grandmaster lost | Sync/Delay-Messungen oder Announce-Nachrichten fehlen |
-| Offset | Masterzeit minus lokalem, UTC-verankertem Sitzungstakt; mit gültigem UTC-Offset umgerechnet |
-| Mean path delay | Aus dem Vier-Zeitstempel-E2E-Austausch geschätzte mittlere Laufzeit |
-| Relative frequency | Steigung der gemessenen Zeitabweichung in ppm; keine angewendete Audiokorrektur |
+| Software reference | Software-GM sendet; TX/RX laufen mit seinem lokalen QPC-Takt |
+| Acquiring rate | Messfenster fehlt oder begrenzte Nachführung läuft |
+| PTP rate locked | Frische stabile Referenz, weniger als 1 ppm verbleibende Regeldifferenz und beide Netzwerk-Audioworker aktiv |
+| Holdover | Referenz war gültig, ist jetzt ausgefallen, verrauscht oder gewechselt; zuletzt angewendete Rate bleibt erhalten |
+| Listening / Waiting for Sync | Noch kein passender Master bzw. vollständiger Sync-Austausch |
+| Measuring | Messungen vorhanden, Stabilitätsbedingungen noch nicht erfüllt |
+| Offset | Masterzeit minus lokalem UTC-verankertem Sitzungstakt; keine Audioverzögerung |
+| Path delay | Geschätzte mittlere Netzwerklaufzeit bei angenommener Pfadsymmetrie |
+| Relative frequency | Aus dem Offsetverlauf geschätzte Masterfrequenz relativ zum lokalen QPC |
+| Applied rate / rateCorrectionPpm | Tatsächlich von TX und RX verwendete Frequenzkorrektur |
 
-Der lokale Messtakt wird beim Start an UTC verankert und läuft danach monoton über QPC/steady_clock.
-Die Windows-Uhr wird nicht verändert. Spätere Windows-Uhrkorrekturen springen nicht in die Messreihe.
-Der Software-GM verwendet diesen lokalen OS/QPC-Oszillator. Er kündigt Clock-Class **248**,
-unbekannte Genauigkeit **0xFE** und Time-Source **0xA0** an. Er setzt keine GPS-/UTC-/TAI-
-Traceability-Flags und deklariert eine beliebige Zeitskala (`ptpTimescale=false`), keine
-nachgewiesene TAI-Zeit. Die Ausgangsepoche wird lediglich einmal an die lokale Windows-Zeit angelehnt.
-Wenn ein PTP-Zeitskalen-Master keinen gültigen UTC-Offset ankündigt, bleibt der umgerechnete
-Offset leer; der rohe Zeitskalenunterschied steht im Diagnose-JSON als `rawOffsetNs`.
-Bei Zeitstufen über einer Sekunde wird das Stabilitätsfenster neu aufgebaut.
+Ein großer konstanter Offset, z. B. −1,3 Sekunden, verschiebt **keine Audiodaten**. Nur die
+Frequenz beeinflusst Paketintervalle. Der GM misst sich nicht selbst: Offset und Pfadlaufzeit
+bleiben dort leer. Bei schlechter Messqualität bleibt der Follower im Erwerb oder Holdover.
+Software-Rate-Lock beweist keine Hardware- oder Phasensynchronisation.
 
-Diese erste Fassung verwendet **Anwendungs-Zeitstempel** beim Senden/Empfangen. Windows-Scheduling,
-Netzwerk-Asymmetrie und Warteschlangen beeinflussen das Ergebnis. Es gibt noch keine Kernel-/NIC-
-Hardware-Zeitstempel, keine garantierte Mikrosekundenpräzision und keinen virtuellen Clock-Servo.
-Ein symmetrischer Pfad wird angenommen; Messungen mit negativer oder über einer Sekunde liegender
-mittlerer Pfadlaufzeit werden verworfen. Messfenster und Kandidaten-/Paketlisten sind begrenzt.
+## Regelung und Audio-I/O
 
-Unterstützt wird das PTPv2-Default-Transportfeld. PTPv1, L2/gPTP, P2P, Unicast-Aushandlung,
-Authentifizierungsprofile, automatische Grandmaster-Election und Hardware-Clock-Steuerung sind noch offen.
-Der Testbetrieb gehört in ein vertrauenswürdiges Audio-LAN.
+- Clock-Modul: Auswertung alle 100 ms. Voraussetzung sind mindestens acht frische Messungen
+  über sechs Sekunden, Regressionsresiduum unter 250 µs und akzeptierte Frequenz ±1000 ppm.
+- Korrektur maximal ±1000 ppm, Änderung höchstens **20 ppm pro Sekunde**. +50 ppm verkürzt das
+  lokale Paketintervall entsprechend. RTP-Zeitstempel steigen weiter pro 240-Frame-Block;
+  die Timeline springt nicht wegen eines PTP-Offsets.
+- TX und RX lesen dieselbe atomare Ratenkorrektur ohne PTP-Mutex oder JSON-Verarbeitung.
+  OS-Stalls haben begrenztes Catch-up; ausgelassene TX-Blöcke erscheinen als RTP-Lücken.
+- Bridge verwendet ihre bestehenden adaptiven Puffer zwischen WASAPI-Geräten und Netzwerktakt.
+- VSC erhält im PTP-Modus adaptive TX-/RX-Puffer mit **je 20 ms Zielpuffer** und einen lokalen
+  I/O-Worker. ASIO-Speicher-ABI, ASIO-Callback-Timer und WDM-Protokoll bleiben erhalten.
+  Die Puffer addieren Latenz; Host-Latenzangaben sind keine exakte Ende-zu-Ende-Messung.
+  Queue, SRC-Drift, verworfene Frames und Underruns stehen im Status-JSON.
+- Bei Referenzverlust laufen Audio und die zuletzt angewendete Rate weiter. Rückkehr oder
+  Master-Wechsel erfordern erneut ein stabiles Messfenster und gleitende Nachführung.
+  Langfristige Genauigkeit im Holdover ist nicht garantiert.
 
-## Konfigurationsdatei
+Physische Geräte-Clock, Windows-Uhr und ASIO-Host-Clock werden nicht verstellt. Ihre Abweichung
+wird durch SRC ausgeglichen. `audioLocked`, `locked` und `synchronized` bleiben deshalb **false**.
+`audioRateActive` und `audioRateLocked` beschreiben ausschließlich die Software-Netzwerkrate;
+`phaseSynchronized` bleibt false.
 
-Beide Audio-Anwendungen speichern die neuen Felder:
+## Transport und Grenzen
 
-```json
-{
-  "clockSource": "ptp-monitor",
-  "ptpDomain": 0,
-  "interface": "192.168.1.20"
-}
-```
+PTPv2 E2E über **224.0.1.129**, UDP **319/320**, TTL 1. GM: Announce 1 Hz,
+Two-Step Sync/Follow_Up 8 Hz, Delay_Req/Resp. Der Follower unterstützt auch One-Step.
+Ein anderer PTP-Dienst kann die Ports blockieren. Firewall, Windows-Time-Dienst und
+Sicherheitsfunktionen werden nicht automatisch verändert.
 
-Die übrigen bereits vorhandenen Audio-/Kanal-/Gerätefelder bleiben erforderlich.
-Für die ausdrücklich gewählte GM-Rolle gilt `"clockSource": "ptp-grandmaster"`.
-`internal` bleibt Standard. `ptp` als disziplinierte Audio-Clock wird weiterhin ausdrücklich
-abgelehnt; Monitor-Betrieb und tatsächliche Audio-Synchronisation werden nicht gleichgesetzt.
+Anwendungs-Zeitstempel sind durch Windows-Scheduling, Warteschlangen und Pfadasymmetrie begrenzt.
+Clock-Class 248, unbekannte Genauigkeit 0xFE und Time-Source 0xA0 kennzeichnen den Software-Oszillator.
+Der GM behauptet keine GPS-/TAI-/UTC-Traceability und verwendet eine beliebige, beim Start an lokale
+UTC angelehnte Zeitskala. Uhrstufen über einer Sekunde setzen das Messfenster zurück. Ein fremder
+PTP-Zeitskalen-Master benötigt einen gültigen UTC-Offset für die umgerechnete Offsetanzeige.
 
-## Prüfung und nächste Schritte
+Kernel-/NIC-Zeitstempel, Hardware-Clock-Steuerung, BMCA-Election, gPTP/P2P, gemeinsame RTP-
+Präsentationszeit und samplegenaue Wiedergabe sind offen. WDM bleibt ein separat testsignierter,
+nicht produktionsreifer Prototyp. Software-Rate-Lock ist keine Produktionsfreigabe.
 
-Automatisiert geprüft: feste Wire-Fixtures, Parser-Grenzen, signierte Korrekturwerte,
-One-/Two-Step, vertauschte Reihenfolge, Sequenz-Wrap, falsche Antworten, E2E-/UTC-Rechnung,
-synthetische 50-ppm-Drift, Timeout/Master-Wechsel/Zeitstufen sowie ein tatsächlicher UDP-Austausch
-über Loopback. Synthetische Referenzpakete bleiben auf die isolierten Protokolltests beschränkt. Außerdem wird geprüft, dass
-die Engine denselben Monitor teilt und keine Audio-Synchronisation erfindet.
-Zusätzlich werden die tatsächlichen Engine-Implementierungen von Software-GM und Monitor gemeinsam über echte Loopback-UDP-Sockets
-getestet: erzeugte Wire-Nachrichten, Freilauf-Flags, Delay-Antworten, Domain-Filterung, Konfliktwarnung,
-GM-Ausfall und erneute Übernahme nach GM-Neustart ohne Neustart des Monitors.
+## Prüfung
 
-Noch erforderlich:
+Automatisierte Tests verwenden getrennte Ports und ausdrücklich aktivierte Test-Audioquellen:
 
-1. Interoperabilität und Messfehler gegen eine unabhängige PTP-Referenz auf mehreren PCs messen.
-2. Kernel-/NIC-Zeitstempel und die jeweils unterstützte Windows-/Adapter-Hardware erfassen.
-3. Einen begrenzten Clock-Servo mit Holdover, Wiederfang und Verhalten bei Master-Wechsel aufbauen.
-4. Audio-Pacing/Resampling für Bridge und anschließend die ASIO-/WDM-Clock-Domänen daran koppeln.
-5. RTP-Zeitstempel, gemeinsame Präsentationszeit und synchronen Start integrieren.
-6. Erst nach geprüfter Audio-Taktkopplung einen echten **Clock Locked**-Zustand freigeben.
+- Wire-Fixtures, One-/Two-Step, E2E/UTC, Sequenz-Wrap, ungültige Pakete und Masterwechsel.
+- Tatsächlicher Software-GM/Follower-Austausch über UDP-Loopback und GM-Neustart.
+- Aus PTP-Austauschen abgeleitete −500/+50/+500 ppm, Regelslew, Intervallvorzeichen, großer
+  Offset, Holdover, unzulässige Frequenz und Wiederfang.
+- Kontinuierliches SRC über simulierte drei Minuten je Driftwert, Stereoerhalt und Pufferstatistik.
+- Zwei Bridge-Engines, bidirektionales RTP und Testbackend-Wiedergabe während GM-Ausfall/-Rückkehr.
+- ASIO-Host ↔ VSC ↔ RTP ↔ ASIO bei 44,1/48/96 kHz, mit und ohne PTP-/SRC-Pfad.
 
-Das gemeldete Bridge-Recovery-Problem und die hörbaren Aussetzer sind damit noch nicht als behoben nachgewiesen.
+Der Nutzer beobachtete GM/Follower-Multicast zwischen PC und Laptop in 0.6.2. Die neue Audioregelung
+benötigt noch Mehr-PC-Hörtests, unabhängige Referenzmessungen und Langzeitprüfungen. Bekannte
+Bridge-Recovery-Probleme und Aussetzer gelten damit weiterhin nicht als nachweislich behoben.
 
-## Referenzen
-
-- [LinuxPTP: Transport, E2E, Software-Zeitstempel, Profile und Intervalle](https://www.linuxptp.org/documentation/ptp4l/)
-- [Microsoft: Windows-Timestamping-Konfiguration für spätere Kernel-Anbindung](https://learn.microsoft.com/en-us/windows/win32/api/mstcpip/ns-mstcpip-timestamping_config)
 - [Suite-Bedienung](./WINDOWS-START.md)
-- [Modularchitektur und Testgrenzen](./ARCHITECTURE.md)
+- [Architektur und Testgrenzen](./ARCHITECTURE.md)
+- [LinuxPTP: E2E und Software-Zeitstempel](https://www.linuxptp.org/documentation/ptp4l/)
+- [Microsoft: Kernel-Timestamping-Konfiguration](https://learn.microsoft.com/en-us/windows/win32/api/mstcpip/ns-mstcpip-timestamping_config)

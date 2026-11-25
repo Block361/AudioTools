@@ -24,7 +24,8 @@ Json to_json(const Settings&);
 Settings from_json(const Json&);
 class Engine {
 public:
-  explicit Engine(Settings, AudioBackend backend = AudioBackend::Wasapi);
+  explicit Engine(Settings, AudioBackend backend = AudioBackend::Wasapi,
+                  std::shared_ptr<ptp::Monitor> clock = {});
   ~Engine();
   Json status() const;
 

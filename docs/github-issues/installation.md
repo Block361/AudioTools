@@ -1,6 +1,6 @@
 # Installation und Updates
 
-Stand: OpenAoIP 0.6.0 für Windows x64. Die lokal gebauten Entwicklungs-Setups sind nicht
+Stand: OpenAoIP 0.6.3 für Windows x64. Die lokal gebauten Entwicklungs-Setups sind nicht
 digital signiert. Ein GitHub-Release oder automatischer Updater wird nicht vorausgesetzt.
 
 ## Varianten
@@ -49,6 +49,8 @@ Die LAN-Steuerung besitzt noch keine Anmeldung/Verschlüsselung und gehört in e
 Eine direkte Controller-URL verwenden, wenn automatische Suche über Subnetzgrenzen nicht funktioniert.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 [Übersicht](./uebersicht.md) · [Controller](./controller.md) · [Audio Bridge](./audio-bridge.md) ·
 [Virtual Soundcard](./virtual-soundcard.md) · [Puffer und Latenz](./puffer-latenz.md) ·

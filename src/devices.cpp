@@ -1,8 +1,8 @@
 #include "aoip/audio.hpp"
 #include "aoip/network.hpp"
 #include "aoip/system.hpp"
-#include "httplib.h"
 #include "device_common.hpp"
+#include "httplib.h"
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -31,7 +31,8 @@ void validate_common(const std::string& id, const std::string& name, const std::
 }
 void heartbeat(const std::atomic<bool>& running, const std::string& controller,
                const std::function<Json()>& payload, const std::function<void(const Json&)>& apply,
-               const std::string& bind_host,const std::function<void(const std::string&)>& on_error) {
+               const std::string& bind_host,
+               const std::function<void(const std::string&)>& on_error) {
   std::string last_error;
   while (running) {
     try {
@@ -54,7 +55,8 @@ void heartbeat(const std::atomic<bool>& running, const std::string& controller,
       if (running && last_error != e.what())
         std::cerr << e.what() << "; retrying\n";
       last_error = e.what();
-      if(on_error)on_error(last_error);
+      if (on_error)
+        on_error(last_error);
     }
     wait_running(running, 500);
   }
@@ -238,10 +240,38 @@ struct Sender::Impl {
     }
   }
   void run() {
-    const double interval = packet_duration_ms(config.rate);
-    double deadline = monotonic_ms() + interval;
+    double deadline = monotonic_ms() + packet_duration_ms(config.rate);
     try {
       while (running) {
+        const double interval =
+            config.packet_interval ? config.packet_interval() : packet_duration_ms(config.rate);
+        if (config.external_capture && config.packet_interval) {
+          const double now = monotonic_ms();
+          if (now >= deadline) {
+            // Bound catch-up; a stalled OS must not release an unbounded burst of old audio.
+            if (now - deadline > interval * 3) {
+              const auto skipped = static_cast<std::uint64_t>((now - deadline) / interval);
+              std::lock_guard lock(mutex);
+              for (auto& s : streams) {
+                s.skipped += skipped;
+                s.sequence = std::uint16_t(s.sequence + skipped);
+                s.timestamp += static_cast<std::uint32_t>(skipped * frames_per_packet);
+                s.frame_offset += skipped * frames_per_packet;
+              }
+              deadline += skipped * interval;
+            }
+            if (!config.external_capture(capture_blocks))
+              for (auto& block : capture_blocks)
+                block.fill(0);
+            {
+              std::lock_guard lock(mutex);
+              tick(capture_blocks);
+            }
+            deadline += interval;
+          }
+          std::this_thread::sleep_for(1ms);
+          continue;
+        }
         if (capture || config.external_capture) {
           // Capture hardware supplies the sample clock; transmit complete 240-frame blocks.
           while (running && (capture ? capture->read(capture_blocks)
@@ -337,7 +367,7 @@ struct NetworkDevice::Impl {
             if (config.on_plan)
               config.on_plan(plan);
           },
-          config.host,config.on_error);
+          config.host, config.on_error);
     });
   }
   ~Impl() {
@@ -375,7 +405,8 @@ struct NetworkDevice::Impl {
       result["monitorPort"] = rx.at("monitorPort");
     result["format"] = {{"sampleRate", config.sender.rate}, {"bits", 16}, {"channels", 2}};
     result["clock"] = {{"mode", "software"}, {"synchronized", false}, {"ptpSupported", false}};
-    if(config.clock_status)result["clock"]=config.clock_status();
+    if (config.clock_status)
+      result["clock"] = config.clock_status();
     for (std::size_t i = 0; i < result["streams"].size(); ++i)
       result["streams"][i]["channels"] =
           config.tx_channels
@@ -386,8 +417,18 @@ struct NetworkDevice::Impl {
           config.rx_channels
               ? std::min(2, std::max(0, config.rx_channels - static_cast<int>(i) * 2))
               : 2;
-    for(const auto* direction:{"streams","inputs"}){const auto& names=std::string(direction)=="streams"?config.tx_names:config.rx_names;
-      for(std::size_t i=0;i<result[direction].size();++i){auto& endpoint=result[direction][i];endpoint["labels"]=Json::array();for(int side=0;side<endpoint.at("channels").get<int>();++side){const auto at=i*2+side;endpoint["labels"].push_back(at<names.size()&&!names[at].empty()?names[at]:("Channel "+std::to_string(at+1)));}}
+    for (const auto* direction : {"streams", "inputs"}) {
+      const auto& names = std::string(direction) == "streams" ? config.tx_names : config.rx_names;
+      for (std::size_t i = 0; i < result[direction].size(); ++i) {
+        auto& endpoint = result[direction][i];
+        endpoint["labels"] = Json::array();
+        for (int side = 0; side < endpoint.at("channels").get<int>(); ++side) {
+          const auto at = i * 2 + side;
+          endpoint["labels"].push_back(at < names.size() && !names[at].empty()
+                                           ? names[at]
+                                           : ("Channel " + std::to_string(at + 1)));
+        }
+      }
     }
     return result;
   }

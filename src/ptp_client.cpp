@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include "aoip/audio_clock.hpp"
 #include "aoip/ptp.hpp"
 #include <atomic>
 #include <chrono>
@@ -41,6 +42,8 @@ struct Monitor::Impl {
   SessionClock clock;
   PortIdentity self = local_identity();
   Tracker tracker;
+  AudioRateServo rate_servo;
+  Time next_servo = 0;
   std::unique_ptr<UdpSocket> event, general;
   mutable std::mutex mutex;
   std::atomic<bool> running{true};
@@ -255,6 +258,17 @@ struct Monitor::Impl {
             }
           }
         }
+        {
+          std::lock_guard lock(mutex);
+          const auto now = clock.now();
+          if (now >= next_servo) {
+            auto measurement =
+                options.role == Role::Grandmaster ? grandmaster_status(now) : tracker.status(now);
+            measurement["error"] = error;
+            rate_servo.update(measurement, double(monotonic_ns()) / 1e9);
+            next_servo = now + 100000000;
+          }
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }
     } catch (const std::exception& e) {
@@ -269,6 +283,7 @@ struct Monitor::Impl {
                                                  : tracker.status(clock.now());
     if (options.role == Role::Monitor)
       out["role"] = "monitor";
+    out.update(rate_servo.status());
     out["interface"] = options.interface_ip;
     out["eventPort"] = event->port();
     out["generalPort"] = general->port();
@@ -280,6 +295,8 @@ struct Monitor::Impl {
       out["trackingStable"] = false;
       out["measurementFresh"] = false;
       out["transmitting"] = false;
+      out["rateReferenceReady"] = false;
+      out["rateState"] = "Holdover";
     }
     return out;
   }
@@ -288,6 +305,9 @@ Monitor::Monitor(Options o) : impl_(std::make_unique<Impl>(std::move(o))) {}
 Monitor::~Monitor() = default;
 Json Monitor::status() const {
   return impl_->status();
+}
+double Monitor::rate_ppm() const {
+  return impl_->rate_servo.correction_ppm();
 }
 int Monitor::event_port() const {
   return impl_->event->port();

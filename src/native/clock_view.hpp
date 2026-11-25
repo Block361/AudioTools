@@ -35,10 +35,23 @@ inline int ptp_domain(HWND edit) {
     throw std::runtime_error("PTP domain must be 0-255");
   return value;
 }
+inline std::wstring audio_clock_state(const Json& clock) {
+  if (clock.value("audioLocked", false))
+    return L"Sample locked";
+  if (clock.value("audioRateLocked", false))
+    return clock.value("source", "") == "ptp-grandmaster" ? L"Software reference"
+                                                          : L"PTP rate locked";
+  if (clock.value("audioRateActive", false))
+    return clock.value("rateState", "") == "Holdover" ? L"Holdover" : L"Acquiring rate";
+  return L"Free running";
+}
 inline std::wstring clock_details(const Json& clock) {
   return L"Mode: " + wide(clock.value("mode", "Internal / software")) + L"\nState: " +
-         wide(clock.value("state", "Free running")) +
-         L"\nAudio clock: free running (PTP discipline pending)\n\nGrandmaster: " +
+         wide(clock.value("state", "Free running")) + L"\nAudio clock: " +
+         audio_clock_state(clock) +
+         L"\nPhase/sample synchronization: no\nApplied network rate correction: " +
+         clock_value(clock, "rateCorrectionPpm", 1., L" ppm") + L"\nRate servo: " +
+         wide(clock.value("rateState", "Off")) + L"\n\nGrandmaster: " +
          (clock.value("grandmasterIdentity", Json()).is_string()
               ? wide(clock.at("grandmasterIdentity"))
               : L"—") +

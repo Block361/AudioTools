@@ -1,26 +1,23 @@
-# Dokumentations-Issues vorbereiten
+# OpenAoIP-Dokumentation
 
-Ziel: `Block361/AudioTools`, Label für jedes Issue: **documentation**.
-Stand der Inhalte: lokaler OpenAoIP-Quelltext **0.6.0** und die im Gespräch gemeldeten Praxiserfahrungen.
+Stand: **0.6.3**. Zehn kurze Dokumentationsthemen für `Block361/AudioTools`, jeweils mit
+Label **documentation** und Verweisen auf alle anderen Themen. Veröffentlichung und tatsächliche
+Issue-URLs werden im [Manifest](./manifest.json) festgehalten. Einstieg: [Übersicht](./uebersicht.md).
 
-Die neun Texte sind vollständige Issue-Entwürfe. **Es wurden noch keine GitHub-Issues erstellt.**
-Die Titel und Quelldateien stehen im [Manifest](./manifest.json). Der Einstieg ist die
-[Übersicht](./uebersicht.md); alle neun Texte verweisen aufeinander.
+Die Markdown-Dateien sind die gepflegten Quellen. Ihre relativen Links funktionieren im Repository.
+Beim Veröffentlichen werden sie durch tatsächliche GitHub-Issue-URLs ersetzt und erneut geprüft.
 
-## Veröffentlichung nach Freigabe des GitHub-Zugangs
+```powershell
+# Vorschau ohne Netzwerkänderung:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& './tools/publish-documentation.ps1'"
+# Explizit veröffentlichen oder vorhandene Docs-Issues aktualisieren:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& './tools/publish-documentation.ps1' -Publish"
+```
 
-1. Bestehende offene und geschlossene `documentation`-Issues prüfen und passende Texte aktualisieren,
-   damit keine Duplikate entstehen. Nur neu anlegen, wenn kein passendes Issue existiert.
-2. Das vorhandene Label `documentation` verwenden oder bei ausreichenden Rechten anlegen.
-   Bestehende Labels anderer Issues nicht entfernen.
-3. Texte mit den Manifest-Titeln als Issues veröffentlichen. Kein Commit/Code-Push ist dafür erforderlich.
-4. Tatsächliche Issue-Nummern und URLs speichern. Anschließend alle relativen Verweise auf die neun
-   Entwurfsdateien durch die entsprechenden GitHub-Issue-URLs ersetzen.
-5. Alle veröffentlichten Texte erneut lesen: Label, Titel, gegenseitige Links und offener
-   Status der bekannten Fehler prüfen. Bei unbekanntem Ergebnis einer Erstellung erst nachsehen,
-   bevor erneut erstellt wird.
+Das Hilfsskript prüft offene und geschlossene Issues auf passende Titel, erhält andere Labels,
+speichert erfolgreiche Erstellungen sofort und prüft Inhalte, Titel, Label und Querverweise.
+Bei unklarem Ergebnis einer Erstellung zuerst GitHub prüfen, bevor erneut veröffentlicht wird.
+Vorhandene Git-Zugangsdaten werden nur im Prozessspeicher verwendet und nicht ausgegeben.
 
-Das berichtete Wiederverbindungsproblem und die hörbaren Aussetzer sind offen. Die Texte
-behaupten weder eine nachgewiesene Ursache noch einen bereits veröffentlichten Fix.
-Lokale Dateien sind nicht automatisch im Remote-Repository verfügbar; deshalb enthalten die
-Issue-Texte keine angenommenen GitHub-Quelltextlinks oder erfundenen Issue-Nummern.
+Aussetzer und das gemeldete Bridge-Recovery-Problem bleiben offen. PTP-Frequenzregelung wird
+von gemeinsamer samplegenauer Präsentation getrennt; WDM bleibt experimentell.

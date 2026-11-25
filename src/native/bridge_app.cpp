@@ -256,7 +256,7 @@ public:
     add_numbers(Buffer, buffers);
     add_numbers(NetLatency, net_latencies);
     add_numbers(LocalLatency, local_latencies);
-    add_combo(Clock, {L"Internal / drift compensated", L"PTPv2 monitor (experimental)",
+    add_combo(Clock, {L"Internal / drift compensated", L"PTPv2 follower (software, experimental)",
                       L"PTPv2 grandmaster (software, experimental)"});
     add(PtpDomain, L"EDIT", L"0", WS_BORDER | ES_NUMBER);
     SendMessageW(controls[PtpDomain], EM_SETLIMITTEXT, 3, 0);
@@ -607,9 +607,7 @@ public:
              std::wstring(connected ? L"Connected"
                           : active  ? L"Waiting for controller"
                                     : L"Not connected") +
-             (monitoring ? (clock.value("source", settings.clock_source) == "ptp-grandmaster"
-                                ? L"   ·   Software GM / audio free running   ·   "
-                                : L"   ·   PTP monitor / audio free running   ·   ")
+             (monitoring ? L"   ·   " + audio_clock_state(clock) + L"   ·   "
                          : L"   ·   Clock: internal / free running   ·   ") +
              std::to_wstring(static_cast<int>(band)) + L" kbit/s",
          11, connected ? green : muted);
@@ -622,7 +620,7 @@ public:
     text(dc, {16, bottom + 68, width - 32, 24},
          monitoring ? L"PTP offset: " + clock_value(clock, "offsetNs") + L"   ·   Path delay: " +
                           clock_value(clock, "pathDelayNs") + L"   ·   Drift: " +
-                          clock_value(clock, "frequencyPpm", 1., L" ppm") +
+                          clock_value(clock, "rateCorrectionPpm", 1., L" ppm applied") +
                           L"   ·   Double-click for details"
                     : L"WASAPI user mode · Windows performs device access without an OpenAoIP "
                       L"kernel driver.",

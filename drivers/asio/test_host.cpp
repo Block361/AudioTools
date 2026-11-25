@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "aoip/network.hpp"
+#include "aoip/ptp.hpp"
 #include "aoip/vsc_engine.hpp"
 #include "asio_api.hpp"
 #include "driver_id.hpp"
@@ -64,7 +65,7 @@ double frequency(const std::vector<float>& values, int sr) {
       ++crossings;
   return crossings * double(sr) / frames;
 }
-void run(const wchar_t* dll_path, int sample_rate) {
+void run(const wchar_t* dll_path, int sample_rate, std::shared_ptr<ptp::Monitor> clock = {}) {
   rate = sample_rate;
   sent_frames = 0;
   switches = 0;
@@ -87,7 +88,9 @@ void run(const wchar_t* dll_path, int sample_rate) {
   cfg.rate = rate;
   cfg.buffer_frames = 512;
   cfg.bridge_mapping = name;
-  auto engine = std::make_unique<vsc::Engine>(cfg);
+  if (clock)
+    cfg.clock_source = "ptp-grandmaster";
+  auto engine = std::make_unique<vsc::Engine>(cfg, clock);
   const auto module = LoadLibraryW(dll_path);
   check(module != nullptr, "ASIO DLL failed to load");
   auto get = reinterpret_cast<HRESULT(WINAPI*)(REFCLSID, REFIID, void**)>(
@@ -155,6 +158,12 @@ void run(const wchar_t* dll_path, int sample_rate) {
   }
   check(driver->stop() == ASE_OK, "ASIO stop failed");
   check(passed && switches > 10, "ASIO callbacks did not advance");
+  if (clock) {
+    const auto status = engine->status();
+    check(status.at("clock").value("audioRateLocked", false), "PTP network rate not applied");
+    check(status.at("clockBufferMs") == 20, "PTP SRC adapters not active");
+    check(!status.at("clock").value("audioLocked", true), "Phase lock must not be fabricated");
+  }
   ASIOSamples pos{};
   ASIOTimeStamp time{};
   check(driver->getSamplePosition(&pos, &time) == ASE_OK && (pos.lo || pos.hi),
@@ -179,6 +188,16 @@ int wmain(int argc, wchar_t** argv) {
     NetworkRuntime runtime;
     for (int r : {44100, 48000, 96000})
       run(argv[1], r);
+    UdpSocket sink(0, "127.0.0.1");
+    ptp::Options o;
+    o.interface_ip = "127.0.0.1";
+    o.role = ptp::Role::Grandmaster;
+    o.multicast = false;
+    o.event_port = o.general_port = 0;
+    o.destination_event_port = o.destination_general_port = sink.port();
+    auto clock = std::make_shared<ptp::Monitor>(o);
+    for (int r : {44100, 48000, 96000})
+      run(argv[1], r, clock);
     SetEnvironmentVariableW(L"OPENAOIP_VSC_TEST_MAPPING", nullptr);
     return 0;
   } catch (const std::exception& e) {

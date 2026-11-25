@@ -68,6 +68,7 @@ public:
   explicit Monitor(Options);
   ~Monitor();
   Json status() const;
+  double rate_ppm() const;
   int event_port() const;
   int general_port() const;
 

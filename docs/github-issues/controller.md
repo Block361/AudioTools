@@ -1,6 +1,6 @@
 # Controller und Routing
 
-Stand: OpenAoIP 0.6.0.
+Stand: OpenAoIP 0.6.3.
 
 ## Matrix bedienen
 
@@ -26,7 +26,7 @@ Controller-Alias; Audioformat und Hardware werden in der jeweiligen Audio-Anwend
 
 Grün bestätigt weder einen hörbaren Ausgang noch fehlerfreie analoge Audioqualität.
 Zusätzlich stehen **Device Info**, **Clock Status**, **Network Status** und **Events** zur Verfügung.
-Die Clock bleibt freilaufend; PTP ist nicht implementiert.
+Clock Status zeigt Software reference, Acquiring rate, PTP rate locked oder Holdover sowie PTP-Messungen. Rate locked bedeutet keine samplegenaue Phasensynchronisation.
 
 ## Presets und Ausfälle
 
@@ -40,6 +40,8 @@ Ein neu gestartetes Audiogerät muss sich erneut anmelden. Beim Controller-Wiede
 kurze Unterbrechungen möglich. Das gemeldete Bridge-Recovery-Problem ist davon getrennt.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 [Übersicht](./uebersicht.md) · [Installation](./installation.md) · [Audio Bridge](./audio-bridge.md) ·
 [Virtual Soundcard](./virtual-soundcard.md) · [Puffer und Latenz](./puffer-latenz.md) ·

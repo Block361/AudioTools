@@ -141,7 +141,8 @@ struct Engine::Impl {
   std::thread supervisor;
   std::unique_ptr<AudioSession> session;
   double deadline = 0;
-  Impl(Settings s, AudioBackend b) : settings(std::move(s)), backend(b) {
+  Impl(Settings s, AudioBackend b, std::shared_ptr<ptp::Monitor> clock)
+      : settings(std::move(s)), backend(b) {
     if (settings.tx_channels < 1 || settings.tx_channels > 32 || settings.rx_channels < 1 ||
         settings.rx_channels > 32 || !supported_sample_rate(settings.rate) ||
         settings.endpoints.empty() || settings.endpoints.size() > 32 ||
@@ -151,8 +152,8 @@ struct Engine::Impl {
           "Bridge requires 1-32 channels, valid buffers and 1-32 local audio endpoints");
     if (settings.clock_source != "internal" && settings.clock_source != "ptp-monitor" &&
         settings.clock_source != "ptp-grandmaster")
-      throw std::runtime_error("PTP audio discipline is not implemented; select Internal or PTPv2 "
-                               "monitor for measurements");
+      throw std::runtime_error(
+          "Unknown clock source; select Internal, PTP follower or software GM");
     std::set<int> tx_mapped;
     std::set<std::string> ids, devices;
     for (const auto& e : settings.endpoints) {
@@ -194,6 +195,7 @@ struct Engine::Impl {
     c.rx_names = settings.rx_names;
     c.clock_source = settings.clock_source;
     c.ptp_domain = settings.ptp_domain;
+    c.ptp_clock = std::move(clock);
     c.capture = [this](std::span<Pcm> p) { return capture(p); };
     c.playback = [this](std::span<const Pcm> p) { playback(p); };
     session = std::make_unique<AudioSession>(std::move(c));
@@ -250,10 +252,12 @@ struct Engine::Impl {
     retired.clear();
   }
   bool capture(std::span<Pcm> packets) {
-    const auto now = monotonic_ms(), interval = packet_duration_ms(settings.rate);
-    if (now < deadline)
-      return false;
-    deadline = deadline && now - deadline < interval * 3 ? deadline + interval : now + interval;
+    if (settings.clock_source == "internal") {
+      const auto now = monotonic_ms(), interval = packet_duration_ms(settings.rate);
+      if (now < deadline)
+        return false;
+      deadline = deadline && now - deadline < interval * 3 ? deadline + interval : now + interval;
+    }
     std::fill(tx.begin(), tx.end(), 0.f);
     for (auto& node : nodes)
       if (node->config.mode != EndpointMode::Playback) {
@@ -329,7 +333,8 @@ struct Engine::Impl {
     return result;
   }
 };
-Engine::Engine(Settings s, AudioBackend b) : impl_(std::make_unique<Impl>(std::move(s), b)) {}
+Engine::Engine(Settings s, AudioBackend b, std::shared_ptr<ptp::Monitor> clock)
+    : impl_(std::make_unique<Impl>(std::move(s), b, std::move(clock))) {}
 Engine::~Engine() = default;
 Json Engine::status() const {
   return impl_->status();

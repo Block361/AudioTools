@@ -1,10 +1,10 @@
-# OpenAoIP 0.6.2 architecture and validation boundaries
+# OpenAoIP 0.6.3 architecture and validation boundaries
 
 | Module | Responsibility |
 |---|---|
 | `aoip_audio` | Existing PCM/RTP and jitter buffers, hardware I/O, new native float endpoints and adaptive SPSC buffers |
 | `aoip_network` | Sockets, network initialization and discovery |
-| `aoip_clock` | Experimental software GM / PTPv2 E2E monitoring and shared per-process ownership |
+| `aoip_clock` | Software GM / PTPv2 E2E tracking, bounded frequency servo and shared ownership |
 | `aoip_core` | Registration/plans, routing/persistence and sender/receiver lifecycle |
 | `aoip_session` | Shared discovery, network-node ownership, PCM conversion and measured diagnostics |
 | `aoip_bridge_engine` | Multiple WASAPI nodes, patches, meters, reconnection and drift buffers |
@@ -66,10 +66,7 @@ Bandwidth is observed RTP traffic, excluding IP/UDP/Ethernet overhead and contro
 
 ## Experimental boundaries
 
-PTP monitoring (`ptp-monitor`) and explicit software GM (`ptp-grandmaster`) roles are implemented; see [PTP test mode](./PTP.md).
-Audio clock discipline and automatic grandmaster election remain unimplemented. `internal` stays the default;
-the disciplined `ptp` audio mode still returns an explicit error. Clock Locked is never fabricated.
-Bridge drift correction does not create phase coherence across computers.
+PTPv2 software GM and follower roles feed a shared bounded software rate servo; see [PTP setup](./PTP.md). TX and RX use its atomic correction, limited to ±1000 ppm and 20 ppm/s. Large epoch offsets never jump audio. Reference loss freezes the applied rate; reacquisition requires fresh stable measurements. Bridge retains its adaptive device buffers. VSC adds independent 20 ms TX/RX adaptive buffers and a local transport pump in PTP mode, preserving the ASIO memory ABI and WDM wire protocol. Internal mode retains its existing path. `audioRateLocked` reports software network rate only; phase/sample lock flags remain false. Common RTP presentation time, hardware timestamping and automatic GM election remain open.
 
 ASIO remains a user-mode x64 COM driver and needs no Windows test mode. The audio-memory ABI
 is preserved; preferred/active buffer settings use a separate optional mapping.

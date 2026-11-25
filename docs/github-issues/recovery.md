@@ -1,6 +1,6 @@
 # Recovery nach Ausfällen
 
-Stand: OpenAoIP 0.6.0. Erwartetes Verhalten, automatisierte Prüfungen und gemeldetes Verhalten
+Stand: OpenAoIP 0.6.3. Erwartetes Verhalten, automatisierte Prüfungen und gemeldetes Verhalten
 müssen getrennt betrachtet werden.
 
 ## Controller-Ausfall
@@ -43,6 +43,8 @@ Ein Mikrofon-/USB-Geräteverlust innerhalb einer weiterlaufenden Bridge ist ein 
 separater Testfall; hierfür enthält die Bridge Wiederöffnungsversuche über die Windows-Geräte-ID.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 [Übersicht](./uebersicht.md) · [Installation](./installation.md) · [Controller](./controller.md) ·
 [Audio Bridge](./audio-bridge.md) · [Virtual Soundcard](./virtual-soundcard.md) ·

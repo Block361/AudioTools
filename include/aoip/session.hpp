@@ -1,6 +1,9 @@
 #pragma once
 #include "aoip/system.hpp"
 namespace aoip {
+namespace ptp {
+class Monitor;
+}
 struct SessionConfig {
   std::string id, name, controller = "auto", interface_ip = "0.0.0.0", kind = "audio";
   int tx_channels = 8, rx_channels = 8, rate = 48000, latency_ms = 60;
@@ -9,6 +12,8 @@ struct SessionConfig {
   std::vector<std::string> tx_names, rx_names;
   std::function<bool(std::span<Pcm>)> capture;
   std::function<void(std::span<const Pcm>)> playback;
+  // Explicit dependency injection for headless transport integration (never serialized by UIs).
+  std::shared_ptr<ptp::Monitor> ptp_clock;
 };
 // Shared discovery, network-node lifecycle and diagnostics; independent of any Windows UI.
 class AudioSession {

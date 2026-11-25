@@ -1,6 +1,6 @@
 # Puffer und Latenz
 
-Stand: OpenAoIP 0.6.0.
+Stand: OpenAoIP 0.6.3.
 
 Ein Audiopuffer hält kurzzeitig Samples bereit. So kann die Wiedergabe gleichmäßig weiterlaufen,
 auch wenn Windows oder das Netzwerk einen Audioblock etwas später liefert. Ein größerer Puffer
@@ -50,6 +50,8 @@ gemessene Ende-zu-Ende-Latenz und kein Beleg für eine samplegenaue gemeinsame C
 Dies sind Diagnoseschritte, kein bereits nachgewiesener Fix für die gemeldeten Aussetzer.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 [Übersicht](./uebersicht.md) · [Installation](./installation.md) · [Controller](./controller.md) ·
 [Audio Bridge](./audio-bridge.md) · [Virtual Soundcard](./virtual-soundcard.md) ·

@@ -220,10 +220,11 @@ struct Receiver::Impl {
     }
   }
   void run() {
-    const double interval = packet_duration_ms(config.rate);
-    double deadline = monotonic_ms() + interval;
+    double deadline = monotonic_ms() + packet_duration_ms(config.rate);
     try {
       while (running) {
+        const double interval =
+            config.packet_interval ? config.packet_interval() : packet_duration_ms(config.rate);
         {
           std::lock_guard lock(mutex);
           for (auto& c : channels)

@@ -1,6 +1,9 @@
 #pragma once
 #include "aoip/system.hpp"
 #ifdef _WIN32
+namespace aoip::ptp {
+class Monitor;
+}
 namespace aoip::vsc {
 struct Settings {
   std::string id = "vsc-1", name = "OpenAoIP Virtual Soundcard", interface_ip = "0.0.0.0",
@@ -14,7 +17,7 @@ Json to_json(const Settings&);
 Settings from_json(const Json&);
 class Engine {
 public:
-  explicit Engine(Settings settings);
+  explicit Engine(Settings settings, std::shared_ptr<ptp::Monitor> clock = {});
   ~Engine();
   Json status() const;
 

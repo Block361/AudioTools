@@ -4,14 +4,14 @@ A C++20 prototype of an open-source audio-over-IP system with native Windows Con
 
 **Version 0.6 provides three separate native Windows applications:** Controller, Virtual Soundcard and Audio Bridge. The Controller has a compact per-channel matrix, search, aliases and routing presets. Bridge connects multiple WASAPI capture/loopback/playback endpoints with channel patches, meters, resampling, adaptive drift buffers and device reconnection. VSC retains the existing x64 ASIO driver and experimental WDM backend. Bridge and VSC share a headless per-user engine. Individual installers, a Suite installer and portable packages are provided. See the German [Windows guide](./WINDOWS-START.md) and [module architecture](./ARCHITECTURE.md).
 
-**Version 0.6.2 adds an explicit software-grandmaster role** alongside the experimental PTPv2 E2E monitor shared by Bridge/VSC. One PC can provide Announce/Two-Step-Sync and answer delay requests while other PCs monitor it. Roles are manually selected; automatic BMCA election remains pending. Audio clock discipline is still pending; the apps honestly report free-running audio clocks. See [PTP test mode and remaining work](./PTP.md). Local Bridge drift correction is not multi-PC synchronization. WDM remains an unvalidated kernel test prototype with separate unsigned and VirtualBox-only testsigned packages. The regular installer does not install a kernel driver or change Windows security. See [Windows audio](./WINDOWS-AUDIO.md).
+**Version 0.6.3 couples the network audio rate to PTP.** An explicit software GM and E2E follower share one clock per engine. A bounded frequency servo paces TX/RX; continuous SRC joins WASAPI, ASIO and experimental WDM clock domains. Holdover preserves the last applied rate across reference loss. This is software frequency discipline, with no shared presentation epoch, hardware clock or sample/phase lock. See [PTP setup and validation](./PTP.md). WDM remains an unvalidated kernel prototype; regular installers do not install it or change Windows security. See [Windows audio](./WINDOWS-AUDIO.md).
 
 The legacy CLI/browser controller and physical soundcard endpoints are retained. See the [network quick start](./NETZWERK-START.md). Runtime executables use the static C++ runtime; endpoint PCs need no Node.js or compiler.
 Project repository: [Block361/AudioTools](https://github.com/Block361/AudioTools). The Windows
 workflow builds and tests the native apps; it does not install a kernel driver. A skipped
 WDM runtime test means no compatible driver is installed, not that kernel audio passed.
 
-**This prototype sends real audio packets.** It captures microphones and sound cards, generates test tones or loops WAV files, sends audio directly over UDP, and plays received streams through native audio devices. Receiver snapshots can also be auditioned or downloaded. PTP audio synchronization and Dante/AES67 interoperability are not implemented.
+**This prototype sends real audio packets.** It captures microphones and sound cards, generates test tones or loops WAV files, sends audio directly over UDP, and plays received streams through native audio devices. Receiver snapshots can also be auditioned or downloaded. Sample-accurate presentation alignment and Dante/AES67 interoperability remain unimplemented.
 
 ## Build and run on Windows
 

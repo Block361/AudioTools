@@ -106,7 +106,7 @@ public:
     add_combo(SampleRate, rates);
     add_combo(Latency, latencies);
     add_combo(Buffer, buffers);
-    add_combo(Clock, {L"Internal", L"PTP monitor", L"PTP GM"},
+    add_combo(Clock, {L"Internal", L"PTP follower", L"PTP GM"},
               ptp_selection(settings.clock_source));
     add(PtpDomain, L"EDIT", std::to_wstring(settings.ptp_domain), WS_BORDER | ES_NUMBER);
     SendMessageW(controls[PtpDomain], EM_SETLIMITTEXT, 3, 0);
@@ -335,14 +335,14 @@ public:
     text(dc, {x, y, width - x - 14, 26}, L"STATUS / DIAGNOSTICS", 11, ink, FW_SEMIBOLD);
     y += 34;
     const int rate = live.value("sampleRate", settings.rate);
-    const bool locked = live.value("synchronized", false);
     const auto clock = live.value("clock", Json::object());
+    const bool locked = clock.value("audioRateLocked", false);
     const bool monitoring = ptp_selection(clock.value("source", settings.clock_source)) > 0;
     std::vector<std::pair<std::wstring, std::wstring>> rows = {
         {L"Network", connected ? L"Connected"
                      : active  ? L"Waiting for controller"
                                : L"Not connected"},
-        {L"Audio clock", locked ? L"Locked" : L"Free running"},
+        {L"Audio clock", active ? audio_clock_state(clock) : L"Stopped"},
         {L"Sample rate", std::to_wstring(rate) + L" Hz"},
         {L"Active TX / RX",
          std::to_wstring(active ? live.value("txChannels", settings.tx_channels) : 0) + L" / " +
@@ -362,7 +362,7 @@ public:
                              ? std::to_wstring(live.value("activeBufferFrames", 0)) + L" frames"
                              : L"No ASIO buffers open"}};
     if (monitoring) {
-      rows.push_back({L"PTP status", wide(clock.value("state", "Stopped"))});
+      rows.push_back({L"PTP rate", clock_value(clock, "rateCorrectionPpm", 1., L" ppm")});
       rows.push_back({L"PTP offset / delay",
                       clock_value(clock, "offsetNs") + L" / " + clock_value(clock, "pathDelayNs")});
       rows.push_back({L"PTP grandmaster", clock.value("grandmasterIdentity", Json()).is_string()
@@ -391,8 +391,8 @@ public:
               i < int(tx.size()) ? tx[i].get<float>() : 0.f);
       }
       text(dc, {12, base + 82, form - 12, 38},
-           L"PTP: choose one Software GM, other PCs use Monitor. Audio stays free "
-           L"running.\nDouble-click the status area for clock details.",
+           L"PTP: one Software GM, other PCs use Follower. Software rate discipline; "
+           L"no phase lock.\nDouble-click the status area for clock details.",
            10, muted, FW_NORMAL, DT_WORDBREAK);
     }
   }

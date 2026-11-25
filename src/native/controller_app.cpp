@@ -334,22 +334,26 @@ public:
                                      std::to_wstring(rate) + L" Hz"});
       if (tab == 2) {
         const auto clock = d.value("clock", Json::object());
-        values.insert(
-            values.end(),
-            {wide(clock.value("mode", "Internal / software")),
-             clock.value("synchronized", false) ? L"Locked" : L"Free running",
-             wide(clock.value("state", "Free running")),
-             clock_value(clock, "offsetNs") + L" / " + clock_value(clock, "pathDelayNs")});
+        values.insert(values.end(), {wide(clock.value("mode", "Internal / software")),
+                                     online ? audio_clock_state(clock) : L"Offline",
+                                     wide(clock.value("state", "Free running")),
+                                     clock_value(clock, "offsetNs") + L" / " +
+                                         clock_value(clock, "pathDelayNs")});
       }
       if (tab == 3)
         values.insert(values.end(),
                       {wide(d.at("host")), std::to_wstring(bytes), std::to_wstring(received),
                        std::to_wstring(lost) + L" / " + std::to_wstring(late)});
       x = 16;
+      const auto clock = d.value("clock", Json::object());
+      const auto clock_color = clock.value("audioRateLocked", false)   ? green
+                               : clock.value("audioRateActive", false) ? amber
+                                                                       : gray;
       for (std::size_t i = 0; i < values.size(); ++i) {
         text(dc, {x, y, sizes[i] - 8, 28}, values[i], 12,
              !online              ? gray
              : i == 1 && tab == 1 ? green
+             : i == 2 && tab == 2 ? clock_color
                                   : ink,
              i == 0 ? FW_SEMIBOLD : FW_NORMAL);
         x += sizes[i];

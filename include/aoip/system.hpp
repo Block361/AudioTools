@@ -24,7 +24,8 @@ public:
   void set_route(const Json& route);
   void remove_route(const std::string& receiver, const std::string& input, int channel = 0);
   void set_device_name(const std::string& id, const std::string& name);
-  void set_channel_name(const std::string& id,const std::string& direction,const std::string& endpoint,int side,const std::string& name);
+  void set_channel_name(const std::string& id, const std::string& direction,
+                        const std::string& endpoint, int side, const std::string& name);
   Json preset() const;
   void restore_preset(const Json&);
   bool fresh() const;
@@ -45,6 +46,8 @@ struct SenderConfig {
   bool register_with_controller = true;
   int rate = 48000;
   std::function<bool(std::span<Pcm>)> external_capture;
+  // Optional software audio clock, in local monotonic milliseconds per 240-frame block.
+  std::function<double()> packet_interval;
 };
 class Sender {
 public:
@@ -70,6 +73,7 @@ struct ReceiverConfig {
   bool register_with_controller = true;
   int rate = 48000;
   std::function<void(std::span<const Pcm>)> external_playback;
+  std::function<double()> packet_interval;
 };
 class Receiver {
 public:

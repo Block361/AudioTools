@@ -1,4 +1,5 @@
 #include "aoip/session.hpp"
+#include "aoip/audio_clock.hpp"
 #include "aoip/discovery.hpp"
 #include "aoip/network.hpp"
 #include "aoip/ptp.hpp"
@@ -41,6 +42,7 @@ struct AudioSession::Impl {
   std::shared_ptr<ptp::Monitor> ptp_monitor;
   std::atomic<bool> running{true};
   std::atomic<double> last_plan{0};
+  std::atomic<double> tx_tick{0}, rx_tick{0};
   mutable std::mutex mutex;
   std::unique_ptr<NetworkDevice> node;
   std::thread worker;
@@ -58,12 +60,22 @@ struct AudioSession::Impl {
       throw std::runtime_error("PTP domain must be 0-255");
     if (config.clock_source != "internal" && config.clock_source != "ptp-monitor" &&
         config.clock_source != "ptp-grandmaster")
-      throw std::runtime_error("Audio PTP clock discipline is not implemented; use Internal or the "
-                               "experimental ptp-monitor mode");
+      throw std::runtime_error(
+          "Unknown clock source; select Internal, PTP follower or software GM");
     if (config.clock_source != "internal")
-      ptp_monitor = ptp::shared_monitor(
-          config.interface_ip, config.ptp_domain,
-          config.clock_source == "ptp-grandmaster" ? ptp::Role::Grandmaster : ptp::Role::Monitor);
+      ptp_monitor = config.ptp_clock ? config.ptp_clock
+                                     : ptp::shared_monitor(config.interface_ip, config.ptp_domain,
+                                                           config.clock_source == "ptp-grandmaster"
+                                                               ? ptp::Role::Grandmaster
+                                                               : ptp::Role::Monitor);
+    if (ptp_monitor) {
+      const auto selected = ptp_monitor->status();
+      if (selected.value("domain", -1) != config.ptp_domain ||
+          selected.value("interface", "") != config.interface_ip ||
+          selected.value("source", "") != config.clock_source)
+        throw std::runtime_error(
+            "Audio session and PTP reference must use the same interface, domain and role");
+    }
     worker = std::thread([this] { run(); });
   }
   ~Impl() {
@@ -100,8 +112,22 @@ struct AudioSession::Impl {
           c.sender.rate = c.receiver.rate = config.rate;
           c.receiver.port = c.receiver.monitor_port = 0;
           c.receiver.latency_ms = config.latency_ms;
-          c.sender.external_capture = config.capture;
-          c.receiver.external_playback = config.playback;
+          c.sender.external_capture = [this](std::span<Pcm> p) {
+            tx_tick = monotonic_ms();
+            return config.capture && config.capture(p);
+          };
+          c.receiver.external_playback = [this](std::span<const Pcm> p) {
+            rx_tick = monotonic_ms();
+            if (config.playback)
+              config.playback(p);
+          };
+          if (ptp_monitor) {
+            const auto interval = [this] {
+              return disciplined_interval_ms(config.rate, ptp_monitor->rate_ppm());
+            };
+            c.sender.packet_interval = interval;
+            c.receiver.packet_interval = interval;
+          }
           c.on_plan = [this](const Json&) {
             last_plan = monotonic_ms();
             std::lock_guard lock(mutex);
@@ -130,8 +156,22 @@ struct AudioSession::Impl {
     retired.reset();
   }
   Json clock_status() const {
-    if (ptp_monitor)
-      return ptp_monitor->status();
+    if (ptp_monitor) {
+      auto out = ptp_monitor->status();
+      const auto now = monotonic_ms();
+      const bool applied = tx_tick.load() > 0 && rx_tick.load() > 0 && now - tx_tick.load() < 250 &&
+                           now - rx_tick.load() < 250;
+      out["mode"] = config.clock_source == "ptp-grandmaster" ? "PTPv2 software GM"
+                                                             : "PTPv2 software follower";
+      out["audioDiscipline"] = "Software network rate / adaptive SRC";
+      out["audioRateActive"] = applied;
+      out["audioRateLocked"] = applied && out.value("rateReferenceReady", false);
+      // These legacy flags describe phase/sample lock, which frequency discipline does not imply.
+      out["audioLocked"] = false;
+      out["synchronized"] = false;
+      out["locked"] = false;
+      return out;
+    }
     return {{"source", "internal"},  {"mode", "Internal / software"}, {"locked", false},
             {"synchronized", false}, {"audioLocked", false},          {"ptpAvailable", false},
             {"ptpSupported", true},  {"trackingStable", false},       {"state", "Free running"}};

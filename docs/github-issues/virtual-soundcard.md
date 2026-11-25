@@ -1,6 +1,6 @@
 # Virtual Soundcard
 
-Stand: OpenAoIP 0.6.0. Netzwerk-TX sind Ausgänge der Audioanwendung, Netzwerk-RX sind deren Eingänge.
+Stand: OpenAoIP 0.6.3. Netzwerk-TX sind Ausgänge der Audioanwendung, Netzwerk-RX sind deren Eingänge.
 
 ## ASIO
 
@@ -31,13 +31,14 @@ ASIO und WDM sind alternative Modi derselben Virtual Soundcard.
 
 Die Anwendung zeigt Running/Stopped, Controller-Verbindung, Samplerate, Kanalzahl,
 RTP-Bandbreite, Treiber-/Hoststatus, Paketverlust und Buffer-Underruns.
-Internal/free-running ist die verfügbare Clock-Quelle. PTP ist nicht implementiert und
-Clock Locked wird nicht behauptet. **Stop** oder Schließen beendet diese Audiositzung.
+Internal bleibt Standard. Ein PC kann Software-GM sein, andere arbeiten als PTP-Follower. Ein begrenzter Servo regelt die TX-/RX-Netzwerkrate; kontinuierliches SRC verbindet sie mit den lokalen ASIO-/WDM-Takten. Im PTP-Modus kommen je Richtung 20 ms Zielpuffer hinzu. PTP rate locked ist keine samplegenaue Phasensynchronisation. **Stop** oder Schließen beendet diese Audiositzung.
 
 Wenn eine Anwendung bereits vorhandene Windows-Geräte, ein virtuelles Kabel oder den
 Windows-Mix nutzen soll, ist die Audio Bridge der passende Zugang ohne OpenAoIP-Kerneltreiber.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 [Übersicht](./uebersicht.md) · [Installation](./installation.md) · [Controller](./controller.md) ·
 [Audio Bridge](./audio-bridge.md) · [Puffer und Latenz](./puffer-latenz.md) ·

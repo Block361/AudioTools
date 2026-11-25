@@ -1,17 +1,58 @@
 {
-  "repository": "Block361/AudioTools",
-  "label": "documentation",
-  "sourceVersion": "0.6.0",
-  "publicationStatus": "draft",
-  "issues": [
-    {"key": "uebersicht", "title": "Docs: Übersicht", "file": "uebersicht.md"},
-    {"key": "installation", "title": "Docs: Installation", "file": "installation.md"},
-    {"key": "controller", "title": "Docs: Controller", "file": "controller.md"},
-    {"key": "audio-bridge", "title": "Docs: Audio Bridge", "file": "audio-bridge.md"},
-    {"key": "virtual-soundcard", "title": "Docs: Virtual Soundcard", "file": "virtual-soundcard.md"},
-    {"key": "puffer-latenz", "title": "Docs: Puffer und Latenz", "file": "puffer-latenz.md"},
-    {"key": "audioqualitaet", "title": "Docs: Audioqualität", "file": "audioqualitaet.md"},
-    {"key": "recovery", "title": "Docs: Recovery", "file": "recovery.md"},
-    {"key": "diagnose", "title": "Docs: Diagnose", "file": "diagnose.md"}
-  ]
+    "repository":  "Block361/AudioTools",
+    "label":  "documentation",
+    "sourceVersion":  "0.6.3",
+    "publicationStatus":  "draft",
+    "issues":  [
+                   {
+                       "key":  "uebersicht",
+                       "title":  "Docs: Übersicht",
+                       "file":  "uebersicht.md"
+                   },
+                   {
+                       "key":  "installation",
+                       "title":  "Docs: Installation",
+                       "file":  "installation.md"
+                   },
+                   {
+                       "key":  "controller",
+                       "title":  "Docs: Controller",
+                       "file":  "controller.md"
+                   },
+                   {
+                       "key":  "audio-bridge",
+                       "title":  "Docs: Audio Bridge",
+                       "file":  "audio-bridge.md"
+                   },
+                   {
+                       "key":  "virtual-soundcard",
+                       "title":  "Docs: Virtual Soundcard",
+                       "file":  "virtual-soundcard.md"
+                   },
+                   {
+                       "key":  "puffer-latenz",
+                       "title":  "Docs: Puffer und Latenz",
+                       "file":  "puffer-latenz.md"
+                   },
+                   {
+                       "key":  "audioqualitaet",
+                       "title":  "Docs: Audioqualität",
+                       "file":  "audioqualitaet.md"
+                   },
+                   {
+                       "key":  "recovery",
+                       "title":  "Docs: Recovery",
+                       "file":  "recovery.md"
+                   },
+                   {
+                       "key":  "diagnose",
+                       "title":  "Docs: Diagnose",
+                       "file":  "diagnose.md"
+                   },
+                   {
+                       "key":  "ptp",
+                       "title":  "Docs: PTP",
+                       "file":  "ptp.md"
+                   }
+               ]
 }

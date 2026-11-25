@@ -1,6 +1,6 @@
 # Diagnose bei Audiofehlern
 
-Stand: OpenAoIP 0.6.0. Eine grüne Route zeigt Paketempfang, nicht automatisch einen
+Stand: OpenAoIP 0.6.3. Eine grüne Route zeigt Paketempfang, nicht automatisch einen
 fehlerfreien hörbaren Signalweg. Aufnahme, Netzwerk und tatsächliche Wiedergabe einzeln prüfen.
 
 ## Reihenfolge
@@ -34,7 +34,7 @@ Bei „stolperndem“ Audio zuerst Puffer und Paketstatistik vergleichen. Nur ei
 vor der Bridge absenken und auf Clipping prüfen. Für einen Vergleich nach Möglichkeit ein
 kabelgebundenes, wenig belastetes Netzwerk verwenden. Die konkrete Ursache bleibt bis zum Test offen.
 
-PTP ist nicht implementiert. Clock Locked ist deshalb aktuell kein erreichbarer Normalzustand.
+PTP rate locked bezeichnet die tatsächlich angewendete Software-Netzwerkrate. Acquiring rate und Holdover erfordern Prüfung der PTP-Messqualität. Ein Hardware-/Phasen-Lock wird nicht behauptet.
 Die WDM-Runtime-Prüfung wird ohne akzeptierten installierten Treiber als **Skipped** gemeldet;
 dies ist keine erfolgreiche Kernel-Audioprüfung.
 
@@ -48,6 +48,8 @@ dies ist keine erfolgreiche Kernel-Audioprüfung.
 - Ob Stop/Start einer Bridge genügt oder die Gegenseite ebenfalls neu gestartet werden muss.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 [Übersicht](./uebersicht.md) · [Installation](./installation.md) · [Controller](./controller.md) ·
 [Audio Bridge](./audio-bridge.md) · [Virtual Soundcard](./virtual-soundcard.md) ·

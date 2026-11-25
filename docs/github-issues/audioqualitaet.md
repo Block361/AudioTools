@@ -1,6 +1,6 @@
 # Audioqualität und Dynamik
 
-Stand: OpenAoIP 0.6.0. Im Netzwerk wird **L16/16-Bit-PCM** übertragen. Die Bridge verwendet
+Stand: OpenAoIP 0.6.3. Im Netzwerk wird **L16/16-Bit-PCM** übertragen. Die Bridge verwendet
 lokal Float-Audio und konvertiert für diesen Transport. Eine Float-Schnittstelle zur Soundkarte
 macht die Netzwerkübertragung nicht automatisch zu 24 Bit.
 
@@ -34,6 +34,8 @@ Die lokale Bridge-Driftkorrektur ist keine PTP-Synchronisation und garantiert ke
 Phase mehrerer PCs. Für belastbare Audioqualität sind Hör-, Mess- und Langzeittests nötig.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 [Übersicht](./uebersicht.md) · [Installation](./installation.md) · [Controller](./controller.md) ·
 [Audio Bridge](./audio-bridge.md) · [Virtual Soundcard](./virtual-soundcard.md) ·

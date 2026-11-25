@@ -1,8 +1,8 @@
-# OpenAoIP für Windows – Version 0.6.2
+# OpenAoIP für Windows – Version 0.6.3
 
 Drei eigenständige native Anwendungen: **Controller**, **Virtual Soundcard** und **Audio Bridge**.
 Sie übertragen tatsächlich Audio über RTP. Dies ist weiterhin ein Entwicklungsprototyp:
-Eine experimentelle PTPv2-Software-GM-Rolle stellt eine lokale Zeitreferenz für die Monitore auf anderen PCs bereit. Die Audio-Clock bleibt freilaufend; samplegenaue Synchronisation und Dante-/AES67-Interoperabilität fehlen. Siehe [PTP-Testbetrieb](./PTP.md).
+PTPv2 koppelt die Software-Netzwerkrate über einen begrenzten Servo an einen Software-GM; lokale Audiotakte werden per SRC angebunden. Samplegenaue Präsentation und Dante-/AES67-Interoperabilität fehlen. Siehe [PTP-Bedienung](./PTP.md).
 Der WDM-Kerneltreiber ist experimentell und besitzt keine Produktionsfreigabe.
 
 ## Updates installieren
@@ -12,7 +12,7 @@ Der WDM-Kerneltreiber ist experimentell und besitzt keine Produktionsfreigabe.
    Audiositzung läuft. Nach einem Absturz kann sie bei Inaktivität noch bis zu einer Minute laufen.
 2. **OpenAoIPSuiteSetup.exe** für alle drei Anwendungen ausführen. Alternativ einzeln:
    **OpenAoIPControllerSetup.exe**, **OpenAoIPVirtualSoundcardSetup.exe**, **OpenAoIPAudioBridgeSetup.exe**.
-3. Im Startmenü unter **OpenAoIP** öffnen. Oben links muss **0.6.2** stehen.
+3. Im Startmenü unter **OpenAoIP** öffnen. Oben links muss **0.6.3** stehen.
 
 Erneutes Ausführen desselben Setup-Typs aktualisiert die vorhandene Installation pro Benutzer.
 Einstellungen und Routing liegen außerhalb des Programmordners und bleiben erhalten.
@@ -94,8 +94,7 @@ Ausgewählte Geräte werden über stabile Windows-IDs wiedergefunden und nach Ve
 Beim Start werden keine Routen angelegt. Kopfhörer bei lokalem Mikrofon-Monitoring verwenden.
 
 Samplerate-Konvertierung und ein adaptiver lokaler Puffer kompensieren Restdrift. Netzwerk- und
-lokaler Puffer addieren sich; ihre Werte sind keine gemessene Ende-zu-Ende-Latenz. Dies ersetzt
-keine PTP-Clock und garantiert keine Phasenkohärenz. Auf genau einem PC PTPv2 grandmaster (software, experimental), auf den übrigen PTPv2 monitor wählen. Dazu konkrete LAN-Adressen und dieselbe Domain wählen. Audio bleibt dabei Free running; siehe [PTP-Testbetrieb](./PTP.md).
+lokaler Puffer addieren sich; ihre Werte sind keine gemessene Ende-zu-Ende-Latenz. Auf genau einem PC PTPv2 grandmaster (software, experimental), auf den übrigen PTPv2 follower wählen. Konkrete LAN-Adressen und dieselbe Domain einstellen. Nach stabiler Messung erscheint PTP rate locked; bei Verlust Holdover. VSC fügt im PTP-Modus je Richtung 20 ms SRC-Puffer hinzu. Dies ist Frequenzkopplung, keine samplegenaue Präsentation; siehe [PTP-Bedienung](./PTP.md).
 
 ## Netzwerk, Engine und Einstellungen
 

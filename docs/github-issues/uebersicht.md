@@ -1,6 +1,6 @@
 # OpenAoIP im Überblick
 
-Stand: OpenAoIP 0.6.0, Entwicklungsprototyp für Windows x64.
+Stand: OpenAoIP 0.6.3, Entwicklungsprototyp für Windows x64.
 
 | Anwendung | Aufgabe |
 |---|---|
@@ -27,13 +27,15 @@ Für Serato über ein virtuelles Audiokabel wird dessen Aufnahme-Endpunkt in der
 ## Grenzen des aktuellen Stands
 
 - Echtes OpenAoIP-RTP mit L16/16 Bit und 44,1/48/96 kHz; keine behauptete Dante-/AES67-Kompatibilität.
-- PTP und ein gemeinsamer samplegenauer Takt zwischen PCs sind nicht implementiert.
-- Bridge-Samplerate-Konvertierung und lokale Driftkompensation ersetzen keine gemeinsame Clock.
+- PTPv2-Software-GM/Follower und softwarebasierte Frequenzregelung sind implementiert; gemeinsame samplegenaue Präsentation bleibt offen.
+- Bridge und VSC koppeln lokale Audiotakte über SRC an die PTP-Netzwerkrate; Phasenkohärenz wird nicht garantiert.
 - Der WDM-Treiber ist experimentell; Kernel-Laufzeit- und Produktionsfreigabe stehen aus.
 - Aussetzer und der nach einem Bridge-Ausfall erforderliche Neustart des Gegenübers wurden
   im Praxistest gemeldet und sind noch nicht abschließend untersucht.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 - [Installation](./installation.md)
 - [Controller](./controller.md)

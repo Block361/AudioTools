@@ -1,6 +1,6 @@
 # Audio Bridge
 
-Stand: OpenAoIP 0.6.0. Die Bridge verbindet vorhandene Windows-Audio-Endpunkte mit dem
+Stand: OpenAoIP 0.6.3. Die Bridge verbindet vorhandene Windows-Audio-Endpunkte mit dem
 OpenAoIP-Netzwerk und arbeitet vollständig im User Mode.
 
 ## Geräte hinzufügen
@@ -44,6 +44,8 @@ Die tatsächliche Serato-/Kabel-Konfiguration und Kompatibilität muss auf dem j
 Bei lokalem Mikrofon-Monitoring Kopfhörer verwenden, um Rückkopplung zu vermeiden.
 
 ## Weitere Dokumentation
+
+[PTP](./ptp.md)
 
 [Übersicht](./uebersicht.md) · [Installation](./installation.md) · [Controller](./controller.md) ·
 [Virtual Soundcard](./virtual-soundcard.md) · [Puffer und Latenz](./puffer-latenz.md) ·
