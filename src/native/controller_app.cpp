@@ -156,7 +156,7 @@ public:
   }
   void paint(HDC dc) override {
     header(dc, L"OpenAoIP Controller", preview ? L"Preview" : L"Controller online",
-           preview ? amber : green);
+           preview ? amber : green, true);
     text(dc, {12, 103, 76, 28}, L"TX / device", 11, muted);
     const int edit = std::max(130, (width - 360) / 2);
     text(dc, {103 + edit, 103, 82, 28}, L"RX search", 11, muted);

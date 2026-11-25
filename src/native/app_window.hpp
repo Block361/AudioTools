@@ -22,7 +22,7 @@ public:
   void select(int id, int index);
   void position(int id, Box);
   void header(HDC, const std::wstring& title, const std::wstring& state = L"",
-              COLORREF color = gray);
+              COLORREF color = gray, bool application_icon = false);
   virtual void created() {};
   virtual void layout() {};
   virtual void timer() {};

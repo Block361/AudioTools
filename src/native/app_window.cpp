@@ -29,10 +29,19 @@ void AppWindow::refresh() {
   if (window)
     InvalidateRect(window, nullptr, FALSE);
 }
-void AppWindow::header(HDC dc, const std::wstring& title, const std::wstring& state,
-                       COLORREF color) {
+void AppWindow::header(HDC dc, const std::wstring& title, const std::wstring& state, COLORREF color,
+                       bool application_icon) {
   fill(dc, {0, 0, width, 54}, navy);
-  logo(dc, 14, 10, 32);
+  // Use the executable's own artwork so the header and Windows shell stay consistent.
+  const auto icon =
+      application_icon
+          ? static_cast<HICON>(LoadImageW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1),
+                                          IMAGE_ICON, 32, 32, LR_SHARED))
+          : nullptr;
+  if (icon)
+    DrawIconEx(dc, 14, 10, icon, 32, 32, 0, nullptr, DI_NORMAL);
+  else
+    logo(dc, 14, 10, 32);
   text(dc, {58, 8, width - 300, 25}, title, 19, ink, FW_SEMIBOLD);
   text(dc, {59, 32, width - 330, 14},
        L"OPENAOIP  " + wide(aoip::version) + (preview ? L"  /  PREVIEW" : L""), 9, muted);
