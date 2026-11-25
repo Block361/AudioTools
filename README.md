@@ -7,7 +7,7 @@ A C++20 prototype of an open-source audio-over-IP system with native Windows Con
 **Version 0.6.3 couples the network audio rate to PTP.** An explicit software GM and E2E follower share one clock per engine. A bounded frequency servo paces TX/RX; continuous SRC joins WASAPI, ASIO and experimental WDM clock domains. Holdover preserves the last applied rate across reference loss. This is software frequency discipline, with no shared presentation epoch, hardware clock or sample/phase lock. See [PTP setup and validation](./PTP.md). WDM remains an unvalidated kernel prototype; regular installers do not install it or change Windows security. See [Windows audio](./WINDOWS-AUDIO.md).
 
 The legacy CLI/browser controller and physical soundcard endpoints are retained. See the [network quick start](./NETZWERK-START.md). Runtime executables use the static C++ runtime; endpoint PCs need no Node.js or compiler.
-Project repository: [Block361/AudioTools](https://github.com/Block361/AudioTools). The Windows
+Project repository: [Block361/AudioTools](https://github.com/Block361/AudioTools). See the [published documentation issues](./docs/github-issues/README.md) for installation, routing, audio, PTP and troubleshooting. The Windows
 workflow builds and tests the native apps; it does not install a kernel driver. A skipped
 WDM runtime test means no compatible driver is installed, not that kernel audio passed.
 

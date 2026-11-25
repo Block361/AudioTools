@@ -2,57 +2,77 @@
     "repository":  "Block361/AudioTools",
     "label":  "documentation",
     "sourceVersion":  "0.6.3",
-    "publicationStatus":  "draft",
+    "publicationStatus":  "published",
     "issues":  [
                    {
                        "key":  "uebersicht",
                        "title":  "Docs: Übersicht",
-                       "file":  "uebersicht.md"
+                       "file":  "uebersicht.md",
+                       "number":  9,
+                       "url":  "https://github.com/Block361/AudioTools/issues/9"
                    },
                    {
                        "key":  "installation",
                        "title":  "Docs: Installation",
-                       "file":  "installation.md"
+                       "file":  "installation.md",
+                       "number":  10,
+                       "url":  "https://github.com/Block361/AudioTools/issues/10"
                    },
                    {
                        "key":  "controller",
                        "title":  "Docs: Controller",
-                       "file":  "controller.md"
+                       "file":  "controller.md",
+                       "number":  11,
+                       "url":  "https://github.com/Block361/AudioTools/issues/11"
                    },
                    {
                        "key":  "audio-bridge",
                        "title":  "Docs: Audio Bridge",
-                       "file":  "audio-bridge.md"
+                       "file":  "audio-bridge.md",
+                       "number":  12,
+                       "url":  "https://github.com/Block361/AudioTools/issues/12"
                    },
                    {
                        "key":  "virtual-soundcard",
                        "title":  "Docs: Virtual Soundcard",
-                       "file":  "virtual-soundcard.md"
+                       "file":  "virtual-soundcard.md",
+                       "number":  13,
+                       "url":  "https://github.com/Block361/AudioTools/issues/13"
                    },
                    {
                        "key":  "puffer-latenz",
                        "title":  "Docs: Puffer und Latenz",
-                       "file":  "puffer-latenz.md"
+                       "file":  "puffer-latenz.md",
+                       "number":  14,
+                       "url":  "https://github.com/Block361/AudioTools/issues/14"
                    },
                    {
                        "key":  "audioqualitaet",
                        "title":  "Docs: Audioqualität",
-                       "file":  "audioqualitaet.md"
+                       "file":  "audioqualitaet.md",
+                       "number":  15,
+                       "url":  "https://github.com/Block361/AudioTools/issues/15"
                    },
                    {
                        "key":  "recovery",
                        "title":  "Docs: Recovery",
-                       "file":  "recovery.md"
+                       "file":  "recovery.md",
+                       "number":  16,
+                       "url":  "https://github.com/Block361/AudioTools/issues/16"
                    },
                    {
                        "key":  "diagnose",
                        "title":  "Docs: Diagnose",
-                       "file":  "diagnose.md"
+                       "file":  "diagnose.md",
+                       "number":  17,
+                       "url":  "https://github.com/Block361/AudioTools/issues/17"
                    },
                    {
                        "key":  "ptp",
                        "title":  "Docs: PTP",
-                       "file":  "ptp.md"
+                       "file":  "ptp.md",
+                       "number":  18,
+                       "url":  "https://github.com/Block361/AudioTools/issues/18"
                    }
                ]
 }
