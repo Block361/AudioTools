@@ -1,0 +1,22 @@
+{
+  "id": "iot-example",
+  "name": "Stage Pi",
+  "controller": "auto",
+  "interface": "0.0.0.0",
+  "txChannels": 2,
+  "rxChannels": 2,
+  "sampleRate": 48000,
+  "bufferFrames": 512,
+  "latencyMs": 80,
+  "localLatencyMs": 20,
+  "clockSource": "internal",
+  "ptpDomain": 0,
+  "txNames": ["Mic L", "Mic R"],
+  "rxNames": ["Speakers L", "Speakers R"],
+  "endpoints": [
+    {"id":"mic", "name":"USB input", "device":"default", "mode":"capture",
+     "patches":[{"local":1,"network":1,"gain":1.0},{"local":2,"network":2,"gain":1.0}]},
+    {"id":"speakers", "name":"Local output", "device":"default", "mode":"playback",
+     "patches":[{"local":1,"network":1,"gain":1.0},{"local":2,"network":2,"gain":1.0}]}
+  ]
+}

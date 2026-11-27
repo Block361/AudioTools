@@ -98,6 +98,7 @@ struct DeviceConfig {
   std::function<void(const std::string&)> on_error;
   std::vector<std::string> tx_names, rx_names;
   std::function<Json()> clock_status;
+  bool register_with_controller = true;
 };
 // One registration and one identity, with independent send and receive workers.
 // Set sender.streams or receiver.inputs to zero to disable that direction.
@@ -108,6 +109,7 @@ public:
   NetworkDevice(const NetworkDevice&) = delete;
   NetworkDevice& operator=(const NetworkDevice&) = delete;
   Json describe() const;
+  void apply_plan(const Json&);
 
 private:
   struct Impl;

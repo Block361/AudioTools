@@ -22,12 +22,14 @@ struct Settings {
 };
 Json to_json(const Settings&);
 Settings from_json(const Json&);
+void validate(const Settings&, bool require_endpoints = true);
 class Engine {
 public:
-  explicit Engine(Settings, AudioBackend backend = AudioBackend::Wasapi,
-                  std::shared_ptr<ptp::Monitor> clock = {});
+  explicit Engine(Settings, AudioBackend backend = AudioBackend::System,
+                  std::shared_ptr<ptp::Monitor> clock = {}, bool register_with_controller = true);
   ~Engine();
   Json status() const;
+  void apply_plan(const Json&);
 
 private:
   struct Impl;

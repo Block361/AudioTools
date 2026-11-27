@@ -15,6 +15,19 @@ public static class NativeAoipTest {
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr window,int id);
   [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
+  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int left,top,right,bottom; }
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr window,out Rect rect);
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr window,IntPtr dc,uint flags);
+  public static void SaveClient(IntPtr window,string path) {
+    Rect rect;GetClientRect(window,out rect);
+    using(var bitmap=new System.Drawing.Bitmap(rect.right,rect.bottom))
+    using(var graphics=System.Drawing.Graphics.FromImage(bitmap)) {
+      IntPtr dc=graphics.GetHdc();try{if(!PrintWindow(window,dc,1))throw new Exception("UI capture failed");}finally{graphics.ReleaseHdc(dc);}
+      bitmap.Save(path,System.Drawing.Imaging.ImageFormat.Png);
+    }
+  }
+  [DllImport("user32.dll",EntryPoint="SendMessageTimeoutW",CharSet=CharSet.Unicode)] public static extern IntPtr SendTextTimeout(IntPtr window,uint message,IntPtr wp,string text,uint flags,uint timeout,out IntPtr result);
+  public static void SetText(IntPtr window,string value) { IntPtr result;if(SendTextTimeout(window,0xC,IntPtr.Zero,value,2,5000,out result)==IntPtr.Zero)throw new Exception("Control text update timed out"); }
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window,uint message,IntPtr wp,IntPtr lp);
   [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr window,uint message,IntPtr wp,IntPtr lp,uint flags,uint timeout,out IntPtr result);
   public static IntPtr Find(int pid,string className) {
@@ -32,13 +45,13 @@ public static class NativeAoipTest {
     Message(window,0x201,1,point);Message(window,0x202,0,point);
   }
 }
-'@
+'@ -ReferencedAssemblies System.Drawing
 function Wait-Condition([scriptblock]$Condition,[string]$Label) {
     $taskDeadline = [datetime]::UtcNow.AddSeconds(15)
     do { if (& $Condition) { return }; Start-Sleep -Milliseconds 100 } while ([datetime]::UtcNow -lt $taskDeadline)
     throw "Timed out: $Label"
 }
-$taskController = $null; $taskSoundcard = $null; $taskBridge = $null
+$taskController = $null; $taskSoundcard = $null; $taskBridge = $null; $taskIoT = $null
 $taskEndpoint = Join-Path $taskRoot 'engine.json'
 try {
     # A loopback-only ephemeral TCP port avoids interfering with an existing controller.
@@ -46,7 +59,7 @@ try {
     $taskProbe.Start(); $taskPort = $taskProbe.LocalEndpoint.Port; $taskProbe.Stop()
     $taskController = Start-Process -FilePath (Join-Path $BinaryDirectory 'OpenAoIP Controller.exe') -ArgumentList @('--port',"$taskPort",'--data-dir',('"' + (Join-Path $taskRoot 'controller') + '"')) -WindowStyle Hidden -PassThru
     $taskUrl = "http://127.0.0.1:$taskPort"
-    Wait-Condition { try { (Invoke-RestMethod "$taskUrl/api/state" -TimeoutSec 1).version -eq '0.6.3' } catch { $false } } 'native controller HTTP startup'
+    Wait-Condition { try { (Invoke-RestMethod "$taskUrl/api/state" -TimeoutSec 1).version -eq '0.6.4' } catch { $false } } 'native controller HTTP startup'
     $taskVscFolder = Join-Path $taskRoot 'soundcard'; New-Item -ItemType Directory -Path $taskVscFolder | Out-Null
     @{id='native-ui-test';name='Native UI Test';controller=$taskUrl;interface='127.0.0.1';txChannels=2;rxChannels=2;sampleRate=48000;latencyMs=60;backend='asio'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskVscFolder 'settings.json') -Encoding UTF8
     $taskSoundcard = Start-Process -FilePath (Join-Path $BinaryDirectory 'OpenAoIP Virtual Soundcard.exe') -ArgumentList @('--data-dir',('"' + $taskVscFolder + '"'),'--engine-endpoint',('"' + $taskEndpoint + '"')) -WindowStyle Hidden -PassThru
@@ -93,13 +106,45 @@ try {
     [NativeAoipTest]::Message($taskVscWindow,0x111,65644,0) # CBN_SELCHANGE on API selector.
     if ([NativeAoipTest]::IsWindowEnabled([NativeAoipTest]::GetDlgItem($taskVscWindow,105))) { throw 'Windows/WDM mode did not lock the sample rate to 48 kHz' }
     [NativeAoipTest]::Message($taskVscWindow,0x10,0,0)
+    $taskIoTFolder=Join-Path $taskRoot 'iot'
+    $taskIoT=Start-Process -FilePath (Join-Path $BinaryDirectory 'iot_tests.exe') -ArgumentList @('--serve-fixture',('"'+$taskIoTFolder+'"'),$taskUrl) -WindowStyle Hidden -PassThru
+    Wait-Condition { Test-Path -LiteralPath (Join-Path $taskIoTFolder 'ready.json') } 'IoT management fixture startup'
+    $taskIoTInfo=Get-Content -LiteralPath (Join-Path $taskIoTFolder 'ready.json') -Raw | ConvertFrom-Json
+    $taskIoTUrl="http://127.0.0.1:$($taskIoTInfo.port)"
+    $taskIoTHeaders=@{Authorization=('Bearer '+$taskIoTInfo.token)}
+    Wait-Condition { @((Invoke-RestMethod "$taskUrl/api/state").devices | Where-Object id -eq $taskIoTInfo.id).Count -eq 1 } 'stopped IoT discovery'
+    [NativeAoipTest]::Message($taskControllerWindow,0x113,1,0)
+    [void][NativeAoipTest]::PostMessage($taskControllerWindow,0x111,[IntPtr]210,[IntPtr]::Zero)
+    Wait-Condition { [NativeAoipTest]::Find($taskController.Id,'OpenAoIPIoTManager') -ne [IntPtr]::Zero } 'Controller IoT manager window'
+    $taskIoTWindow=[NativeAoipTest]::Find($taskController.Id,'OpenAoIPIoTManager')
+    Wait-Condition { [NativeAoipTest]::GetDlgItem($taskIoTWindow,702) -ne [IntPtr]::Zero } 'IoT manager controls'
+    [NativeAoipTest]::SetText([NativeAoipTest]::GetDlgItem($taskIoTWindow,702),$taskIoTInfo.token)
+    [NativeAoipTest]::Message($taskIoTWindow,0x111,703,0)
+    Wait-Condition { [NativeAoipTest]::IsWindowEnabled([NativeAoipTest]::GetDlgItem($taskIoTWindow,711)) } 'IoT pairing and remote configuration load'
+    [void][NativeAoipTest]::PostMessage($taskIoTWindow,0x111,[IntPtr]708,[IntPtr]::Zero)
+    Wait-Condition { [NativeAoipTest]::Find($taskController.Id,'OpenAoIPIoTEndpointEditor') -ne [IntPtr]::Zero } 'IoT audio-device/channel-map editor'
+    [NativeAoipTest]::Message([NativeAoipTest]::Find($taskController.Id,'OpenAoIPIoTEndpointEditor'),0x111,307,0)
+    [NativeAoipTest]::SetText([NativeAoipTest]::GetDlgItem($taskIoTWindow,711),'Managed Pi')
+    [NativeAoipTest]::Message($taskIoTWindow,0x111,704,0)
+    Wait-Condition { (Invoke-RestMethod "$taskIoTUrl/v1/config" -Headers $taskIoTHeaders).audio.name -eq 'Managed Pi' } 'Controller sends and persists IoT name'
+    Wait-Condition { [NativeAoipTest]::IsWindowEnabled([NativeAoipTest]::GetDlgItem($taskIoTWindow,705)) } 'IoT apply completion'
+    [NativeAoipTest]::Message($taskIoTWindow,0x111,705,0)
+    Wait-Condition { (Invoke-RestMethod "$taskIoTUrl/v1/status" -Headers $taskIoTHeaders).running } 'Controller starts remote IoT audio'
+    Wait-Condition { [NativeAoipTest]::IsWindowEnabled([NativeAoipTest]::GetDlgItem($taskIoTWindow,706)) } 'IoT start completion'
+    if((Invoke-RestMethod "$taskIoTUrl/v1/config" -Headers $taskIoTHeaders).audio.endpoints.Count -ne 2){throw 'IoT endpoint editor changes were not transferred'}
+    [NativeAoipTest]::SaveClient($taskIoTWindow,(Join-Path $taskRoot 'iot-manager.png'))
+    [NativeAoipTest]::Message($taskIoTWindow,0x111,706,0)
+    Wait-Condition { -not (Invoke-RestMethod "$taskIoTUrl/v1/status" -Headers $taskIoTHeaders).running } 'Controller stops remote IoT audio'
+    [NativeAoipTest]::Message($taskIoTWindow,0x10,0,0)
+    New-Item -ItemType File -Path (Join-Path $taskIoTFolder 'stop') | Out-Null
+    if(-not $taskIoT.WaitForExit(10000) -or $taskIoT.ExitCode -ne 0){throw 'IoT test fixture teardown failed'}
     [NativeAoipTest]::Message($taskControllerWindow,0x10,0,0)
     if (-not $taskSoundcard.WaitForExit(10000) -or -not $taskController.WaitForExit(10000)) { throw 'Native application teardown timed out' }
     if ($taskSoundcard.ExitCode -ne 0 -or $taskController.ExitCode -ne 0) { throw 'Native application exited with an error' }
     if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'controller/routes.json'))) { throw 'Native route was not persisted' }
     Write-Output 'PASS all three native applications, local-device editor, simultaneous Bridge/VSC registration, Start/Stop, per-channel matrix click, all controller tabs and clean teardown (no driver registration or physical recording).'
 } finally {
-    foreach ($taskProcess in @($taskBridge,$taskSoundcard,$taskController)) { if ($taskProcess -and -not $taskProcess.HasExited) { Stop-Process -Id $taskProcess.Id -Force } }
+    foreach ($taskProcess in @($taskIoT,$taskBridge,$taskSoundcard,$taskController)) { if ($taskProcess -and -not $taskProcess.HasExited) { Stop-Process -Id $taskProcess.Id -Force } }
     if (Test-Path -LiteralPath $taskEndpoint) { $taskEngine = Get-Content -Raw -LiteralPath $taskEndpoint | ConvertFrom-Json; $taskEngineProcess=Get-Process -Id $taskEngine.pid -ErrorAction SilentlyContinue; if($taskEngineProcess -and $taskEngineProcess.Path -eq (Join-Path $BinaryDirectory 'OpenAoIP Engine.exe')) { Stop-Process -Id $taskEngineProcess.Id -Force } }
     # Test output remains in the system temporary folder for diagnostics; no recursive deletion.
 }

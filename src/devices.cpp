@@ -249,8 +249,9 @@ struct Sender::Impl {
           const double now = monotonic_ms();
           if (now >= deadline) {
             // Bound catch-up; a stalled OS must not release an unbounded burst of old audio.
-            if (now - deadline > interval * 3) {
-              const auto skipped = static_cast<std::uint64_t>((now - deadline) / interval);
+            auto count = static_cast<std::uint64_t>((now - deadline) / interval) + 1;
+            if (count > 8) {
+              const auto skipped = count - 8;
               std::lock_guard lock(mutex);
               for (auto& s : streams) {
                 s.skipped += skipped;
@@ -259,15 +260,18 @@ struct Sender::Impl {
                 s.frame_offset += skipped * frames_per_packet;
               }
               deadline += skipped * interval;
+              count = 8;
             }
-            if (!config.external_capture(capture_blocks))
-              for (auto& block : capture_blocks)
-                block.fill(0);
-            {
-              std::lock_guard lock(mutex);
-              tick(capture_blocks);
+            for (std::uint64_t n = 0; n < count && running; ++n) {
+              if (!config.external_capture(capture_blocks))
+                for (auto& block : capture_blocks)
+                  block.fill(0);
+              {
+                std::lock_guard lock(mutex);
+                tick(capture_blocks);
+              }
+              deadline += interval;
             }
-            deadline += interval;
           }
           std::this_thread::sleep_for(1ms);
           continue;
@@ -356,6 +360,8 @@ struct NetworkDevice::Impl {
     }
   }
   void start() {
+    if (!config.register_with_controller)
+      return;
     heart = std::thread([this] {
       heartbeat(
           running, config.controller, [this] { return describe(); },
@@ -376,6 +382,8 @@ struct NetworkDevice::Impl {
       heart.join();
     // Best-effort release of this instance only. A crashed process is detected by heartbeat
     // timeout.
+    if (!config.register_with_controller)
+      return;
     try {
       httplib::Client client(config.controller);
       if (config.host != "0.0.0.0")
@@ -440,5 +448,11 @@ NetworkDevice::NetworkDevice(DeviceConfig config)
 NetworkDevice::~NetworkDevice() = default;
 Json NetworkDevice::describe() const {
   return impl_->describe();
+}
+void NetworkDevice::apply_plan(const Json& plan) {
+  if (impl_->sender)
+    impl_->sender->apply_plan(plan);
+  if (impl_->receiver)
+    impl_->receiver->apply_plan(plan);
 }
 } // namespace aoip

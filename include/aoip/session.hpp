@@ -14,6 +14,7 @@ struct SessionConfig {
   std::function<void(std::span<const Pcm>)> playback;
   // Explicit dependency injection for headless transport integration (never serialized by UIs).
   std::shared_ptr<ptp::Monitor> ptp_clock;
+  bool register_with_controller = true;
 };
 // Shared discovery, network-node lifecycle and diagnostics; independent of any Windows UI.
 class AudioSession {
@@ -21,6 +22,7 @@ public:
   explicit AudioSession(SessionConfig);
   ~AudioSession();
   Json status() const;
+  void apply_plan(const Json&);
 
 private:
   struct Impl;

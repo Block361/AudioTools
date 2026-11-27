@@ -131,6 +131,53 @@ Settings from_json(const Json& j) {
   }
   return s;
 }
+void validate(const Settings& s, bool require_endpoints) {
+  if (!valid_id(s.id) || s.name.empty() || s.name.size() > 80 || !valid_ipv4(s.interface_ip) ||
+      (s.controller != "auto" &&
+       (!s.controller.starts_with("http://") || s.controller.size() > 256)) ||
+      s.latency_ms < 20 || s.latency_ms > 500 || s.ptp_domain < 0 || s.ptp_domain > 255)
+    throw std::runtime_error(
+        "Invalid bridge identity, controller, interface, latency or PTP domain");
+  if (s.clock_source != "internal" && s.interface_ip == "0.0.0.0")
+    throw std::runtime_error("PTP requires an explicit local IPv4 interface");
+  for (const auto* names : {&s.tx_names, &s.rx_names}) {
+    if (names->size() > 32)
+      throw std::runtime_error("At most 32 channel names are allowed");
+    for (const auto& name : *names)
+      if (name.size() > 80)
+        throw std::runtime_error("Channel name exceeds 80 bytes");
+  }
+  if (s.tx_channels < 1 || s.tx_channels > 32 || s.rx_channels < 1 || s.rx_channels > 32 ||
+      !supported_sample_rate(s.rate) || (require_endpoints && s.endpoints.empty()) ||
+      s.endpoints.size() > 32 || s.buffer_frames < 64 || s.buffer_frames > 2048 ||
+      s.local_latency_ms < 5 || s.local_latency_ms > 200)
+    throw std::runtime_error(
+        "Bridge requires 1-32 channels, valid buffers and 1-32 local audio endpoints");
+  if (s.clock_source != "internal" && s.clock_source != "ptp-monitor" &&
+      s.clock_source != "ptp-grandmaster")
+    throw std::runtime_error("Unknown clock source; select Internal, PTP follower or software GM");
+  std::set<int> tx_mapped;
+  std::set<std::string> ids, devices;
+  for (const auto& e : s.endpoints) {
+    if (!valid_id(e.id) || !ids.insert(e.id).second || e.device.empty() || e.patches.empty() ||
+        e.patches.size() > 32)
+      throw std::runtime_error("Invalid or duplicate local endpoint");
+    if (!devices.insert(mode_name(e.mode) + ":" + e.device).second)
+      throw std::runtime_error("Configure all channels of a local device in one endpoint entry");
+    std::set<int> local;
+    for (const auto& p : e.patches) {
+      if (p.local < 1 || p.local > 32 || p.network < 1 ||
+          p.network > (e.mode == EndpointMode::Playback ? s.rx_channels : s.tx_channels) ||
+          !std::isfinite(p.gain) || p.gain < 0 || p.gain > 2)
+        throw std::runtime_error("Local/network channel map is out of range");
+      if (e.mode == EndpointMode::Playback) {
+        if (!local.insert(p.local).second)
+          throw std::runtime_error("A local output channel can be assigned only once");
+      } else if (!tx_mapped.insert(p.network).second)
+        throw std::runtime_error("Each network TX channel can have only one local source");
+    }
+  }
+}
 struct Engine::Impl {
   Settings settings;
   AudioBackend backend;
@@ -141,40 +188,10 @@ struct Engine::Impl {
   std::thread supervisor;
   std::unique_ptr<AudioSession> session;
   double deadline = 0;
-  Impl(Settings s, AudioBackend b, std::shared_ptr<ptp::Monitor> clock)
+  Impl(Settings s, AudioBackend b, std::shared_ptr<ptp::Monitor> clock, bool registration)
       : settings(std::move(s)), backend(b) {
-    if (settings.tx_channels < 1 || settings.tx_channels > 32 || settings.rx_channels < 1 ||
-        settings.rx_channels > 32 || !supported_sample_rate(settings.rate) ||
-        settings.endpoints.empty() || settings.endpoints.size() > 32 ||
-        settings.buffer_frames < 64 || settings.buffer_frames > 2048 ||
-        settings.local_latency_ms < 5 || settings.local_latency_ms > 200)
-      throw std::runtime_error(
-          "Bridge requires 1-32 channels, valid buffers and 1-32 local audio endpoints");
-    if (settings.clock_source != "internal" && settings.clock_source != "ptp-monitor" &&
-        settings.clock_source != "ptp-grandmaster")
-      throw std::runtime_error(
-          "Unknown clock source; select Internal, PTP follower or software GM");
-    std::set<int> tx_mapped;
-    std::set<std::string> ids, devices;
+    validate(settings);
     for (const auto& e : settings.endpoints) {
-      if (!valid_id(e.id) || !ids.insert(e.id).second || e.device.empty() || e.patches.empty() ||
-          e.patches.size() > 32)
-        throw std::runtime_error("Invalid or duplicate local endpoint");
-      if (!devices.insert(mode_name(e.mode) + ":" + e.device).second)
-        throw std::runtime_error("Configure all channels of a local device in one endpoint entry");
-      std::set<int> local;
-      for (const auto& p : e.patches) {
-        if (p.local < 1 || p.local > 32 || p.network < 1 ||
-            p.network >
-                (e.mode == EndpointMode::Playback ? settings.rx_channels : settings.tx_channels) ||
-            !std::isfinite(p.gain) || p.gain < 0 || p.gain > 2)
-          throw std::runtime_error("Local/network channel map is out of range");
-        if (e.mode == EndpointMode::Playback) {
-          if (!local.insert(p.local).second)
-            throw std::runtime_error("A local output channel can be assigned only once");
-        } else if (!tx_mapped.insert(p.network).second)
-          throw std::runtime_error("Each network TX channel can have only one local source");
-      }
       auto node = std::make_unique<Node>();
       node->config = e;
       nodes.push_back(std::move(node));
@@ -183,6 +200,7 @@ struct Engine::Impl {
     rx.resize(settings.rx_channels * frames_per_packet);
     SessionConfig c;
     c.id = settings.id;
+    c.register_with_controller = registration;
     c.name = settings.name;
     c.kind = "bridge";
     c.controller = settings.controller;
@@ -333,9 +351,12 @@ struct Engine::Impl {
     return result;
   }
 };
-Engine::Engine(Settings s, AudioBackend b, std::shared_ptr<ptp::Monitor> clock)
-    : impl_(std::make_unique<Impl>(std::move(s), b, std::move(clock))) {}
+Engine::Engine(Settings s, AudioBackend b, std::shared_ptr<ptp::Monitor> clock, bool registration)
+    : impl_(std::make_unique<Impl>(std::move(s), b, std::move(clock), registration)) {}
 Engine::~Engine() = default;
+void Engine::apply_plan(const Json& plan) {
+  impl_->session->apply_plan(plan);
+}
 Json Engine::status() const {
   return impl_->status();
 }

@@ -1,4 +1,4 @@
-# OpenAoIP 0.6.3 architecture and validation boundaries
+# OpenAoIP 0.6.4 architecture and validation boundaries
 
 | Module | Responsibility |
 |---|---|
@@ -88,3 +88,7 @@ Test backends/fixtures are available only to explicit tests or `--preview`. Prod
 does not fall back to dummy audio. Tests do not establish Serato/DAW compatibility, acoustic
 quality, physical hot-unplug recovery or long-duration multi-PC performance. WDM runtime skips
 when no accepted driver is installed.
+
+## OpenAoIP IoT 0.1.0
+
+The separate `openaoip-iot` daemon uses the same bridge/session/network/audio modules and ALSA endpoints. `aoip_iot` owns authenticated configuration, an exclusive configuration-file instance lock, atomic persistence and an independent management registration. The shared network node can delegate registration and route-plan delivery to this owner. Stopped IoT devices advertise management only, so they remain configurable without fabricated audio endpoints. Remote writes require the private device key and a matching configuration revision; the key is excluded from advertisements, exported audio and API responses. Apply releases device/PTP owners before restart and attempts rollback if opening or persistence fails. The Controller uses a separate asynchronous IoT manager and the shared endpoint editor; Windows Bridge and ASIO/WDM operation remain independent. See [IoT](./IOT.md).

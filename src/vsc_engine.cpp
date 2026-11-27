@@ -140,12 +140,17 @@ struct Engine::Impl {
           tx_buffer->write(input);
         const auto now = monotonic_ms();
         if (now >= deadline) {
-          if (now - deadline > interval * 3)
-            deadline = now;
-          rx_buffer->read(output);
-          if (wdm || InterlockedCompareExchange(&bridge.get()->asio_pid, 0, 0))
-            write_local(output);
-          deadline += interval;
+          auto count = static_cast<std::uint64_t>((now - deadline) / interval) + 1;
+          if (count > 8) {
+            deadline += (count - 8) * interval;
+            count = 8;
+          }
+          for (std::uint64_t n = 0; n < count; ++n) {
+            rx_buffer->read(output);
+            if (wdm || InterlockedCompareExchange(&bridge.get()->asio_pid, 0, 0))
+              write_local(output);
+            deadline += interval;
+          }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       }

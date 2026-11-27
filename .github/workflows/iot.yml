@@ -1,0 +1,27 @@
+name: OpenAoIP IoT Linux
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  linux:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    container: ubuntu:26.04
+    steps:
+      - name: Build dependencies
+        run: apt-get update -qq && apt-get install -y --no-install-recommends ca-certificates git cmake ninja-build g++ libasound2t64 curl jq
+      - uses: actions/checkout@v7
+      - name: Build and test
+        run: |
+          cmake -S . -B build/iot -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/iot -j2
+          ctest --test-dir build/iot --output-on-failure -j2
+          sh tests/iot-linux-smoke.sh build/iot/openaoip-iot
+      - name: Package separate IoT product
+        run: cd build/iot && cpack -G TGZ
+      - uses: actions/upload-artifact@v7
+        with:
+          name: OpenAoIP-IoT-${{ runner.arch }}
+          path: build/iot/*.tar.gz

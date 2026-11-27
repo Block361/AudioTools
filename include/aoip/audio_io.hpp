@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace aoip {
-enum class AudioBackend { System, TestNull, Wasapi };
+enum class AudioBackend { System, TestNull, Wasapi, Alsa };
 struct AudioDeviceInfo {
   int index{};
   std::string name;

@@ -1,4 +1,4 @@
-# OpenAoIP für Windows – Version 0.6.3
+# OpenAoIP für Windows – Version 0.6.4
 
 Drei eigenständige native Anwendungen: **Controller**, **Virtual Soundcard** und **Audio Bridge**.
 Sie übertragen tatsächlich Audio über RTP. Dies ist weiterhin ein Entwicklungsprototyp:
@@ -12,7 +12,7 @@ Der WDM-Kerneltreiber ist experimentell und besitzt keine Produktionsfreigabe.
    Audiositzung läuft. Nach einem Absturz kann sie bei Inaktivität noch bis zu einer Minute laufen.
 2. **OpenAoIPSuiteSetup.exe** für alle drei Anwendungen ausführen. Alternativ einzeln:
    **OpenAoIPControllerSetup.exe**, **OpenAoIPVirtualSoundcardSetup.exe**, **OpenAoIPAudioBridgeSetup.exe**.
-3. Im Startmenü unter **OpenAoIP** öffnen. Oben links muss **0.6.3** stehen.
+3. Im Startmenü unter **OpenAoIP** öffnen. Oben links muss **0.6.4** stehen.
 
 Erneutes Ausführen desselben Setup-Typs aktualisiert die vorhandene Installation pro Benutzer.
 Einstellungen und Routing liegen außerhalb des Programmordners und bleiben erhalten.
@@ -120,3 +120,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./build.ps1 -BuildDirectory 
 Programme und Setup-EXEs: `build/desktop/Release`; einzelne ZIPs und Suite: `build/desktop/packages`.
 CLI/Webversion bleiben erhalten. ASIO und dessen mitgelieferter zugehöriger Quelltext: GPL-3.0-only;
 unabhängige Anwendungen: MIT. Ein übersprungener WDM-Runtime-Test bedeutet **nicht getestet**.
+
+## OpenAoIP IoT verwalten
+
+OpenAoIP IoT ist ein separates Linux-Produkt für headless Geräte wie den Raspberry Pi. Es wird nicht vom Windows-Suite-Installer installiert. Den Linux-/ARM64-Dienst zuerst auf dem Pi einrichten; danach im Controller **Manage IoT** wählen, das erkannte Gerät auswählen und dessen privaten Management-Key eingeben. Geräte, Kanalzuordnungen, Namen, Samplerate, Buffer und PTP lassen sich darüber konfigurieren und auf dem Pi speichern. Gestoppte Geräte bleiben erreichbar. Siehe [Pi-Installation und Bedienung](./IOT.md).

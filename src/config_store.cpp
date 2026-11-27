@@ -17,9 +17,14 @@ Json read_configuration(const std::filesystem::path& file, std::size_t max_bytes
 }
 void write_configuration(const std::filesystem::path& file, const Json& value) {
   std::filesystem::create_directories(std::filesystem::absolute(file).parent_path());
-  const auto temp = file.wstring() + L".tmp";
+  auto temp = file;
+  temp += ".tmp";
   {
     std::ofstream output(std::filesystem::path(temp), std::ios::binary | std::ios::trunc);
+#ifndef _WIN32
+    // Configuration may contain the IoT management key. Restrict the empty temporary before writing.
+    std::filesystem::permissions(temp, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+#endif
     output << value.dump(2);
     output.close();
     if (!output)

@@ -13,7 +13,7 @@ struct EndpointConfig {
 // Native user-mode endpoint. No kernel driver or ASIO SDK dependency.
 class AudioEndpoint {
 public:
-  AudioEndpoint(EndpointConfig, AudioBackend backend = AudioBackend::Wasapi);
+  AudioEndpoint(EndpointConfig, AudioBackend backend = AudioBackend::System);
   ~AudioEndpoint();
   void start();
   void stop();

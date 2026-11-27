@@ -441,6 +441,15 @@ struct Controller::Impl {
     Json device = {{"id", body["id"]},         {"name", name},           {"role", role},
                    {"instance", instance},     {"host", host},           {"lastSeen", epoch_ms()},
                    {"streams", Json::array()}, {"inputs", Json::array()}};
+    if(body.contains("management")) {
+      const auto& m=body.at("management");
+      if(!m.is_object() || m.value("product", "")!="OpenAoIP IoT" ||
+         bounded_int(m,"apiVersion",1,1)!=1 || !m.at("running").is_boolean() ||
+         !m.at("revision").is_number_integer() || m.at("revision").get<std::int64_t>()<1)
+        throw std::runtime_error("Invalid IoT management advertisement");
+      device["management"]={{"product","OpenAoIP IoT"},{"apiVersion",1},
+        {"port",bounded_int(m,"port",1024,65535)},{"running",m.at("running")},{"revision",m.at("revision")}};
+    }
     for (const auto* field : {"streams", "inputs"}) {
       const auto items = body.value(field, Json::array());
       if (!items.is_array() || items.size() > 16)
@@ -475,7 +484,7 @@ struct Controller::Impl {
         device[field].push_back(channel);
       }
     }
-    if ((device["streams"].empty() && device["inputs"].empty()) ||
+    if ((device["streams"].empty() && device["inputs"].empty() && !device.contains("management")) ||
         (role == "sender" && (device["streams"].empty() || !device["inputs"].empty())) ||
         (role == "receiver" && (device["inputs"].empty() || !device["streams"].empty())))
       throw std::runtime_error("Device must advertise its enabled send/receive endpoints");

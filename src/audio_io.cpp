@@ -111,7 +111,8 @@ void check(ma_result result, const std::string& action) {
 struct Context {
   ma_context context{};
   explicit Context(AudioBackend backend) {
-    const ma_backend selected = backend == AudioBackend::TestNull ? ma_backend_null : ma_backend_wasapi;
+    const ma_backend selected = backend == AudioBackend::TestNull ? ma_backend_null
+                               : backend == AudioBackend::Alsa ? ma_backend_alsa : ma_backend_wasapi;
     check(ma_context_init(backend != AudioBackend::System ? &selected : nullptr,
                           backend != AudioBackend::System ? 1 : 0, nullptr, &context),
           "Initialize audio backend");
@@ -142,7 +143,7 @@ std::optional<ma_device_id> select(Context& context, const std::string& selector
   }
   std::optional<ma_device_id> found;
   for (ma_uint32 i = 0; i < count; ++i)
-    if (selector == info[i].name) {
+    if (selector == info[i].name || (context.context.backend==ma_backend_alsa && selector==std::string("alsa:")+info[i].id.alsa)) {
       if (found)
         throw std::runtime_error("Device name is ambiguous; use its audio-devices index");
       found = info[i].id;
@@ -186,6 +187,7 @@ AudioDevices audio_devices(AudioBackend backend) {
   AudioDevices result;
   result.backend = ma_get_backend_name(context.context.backend);
   auto identifier = [&](const ma_device_info& info) {
+    if (context.context.backend == ma_backend_alsa) return std::string("alsa:") + info.id.alsa;
 #ifdef _WIN32
     if(context.context.backend==ma_backend_wasapi){const auto* raw=reinterpret_cast<const wchar_t*>(info.id.wasapi);const int n=WideCharToMultiByte(CP_UTF8,0,raw,-1,nullptr,0,nullptr,nullptr);std::string id(std::max(0,n),0);if(n)WideCharToMultiByte(CP_UTF8,0,raw,-1,id.data(),n,nullptr,nullptr);if(!id.empty())id.pop_back();return "id:"+id;}
 #endif

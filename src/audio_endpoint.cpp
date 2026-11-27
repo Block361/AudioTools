@@ -1,6 +1,7 @@
 #include "aoip/audio_endpoint.hpp"
 #include "miniaudio.h"
 #include <algorithm>
+#include <map>
 #include <mutex>
 #include <stdexcept>
 #ifdef _WIN32
@@ -16,9 +17,15 @@ struct Host {
   ma_context context{};
   std::mutex control;
   explicit Host(AudioBackend backend) {
-    const ma_backend selected =
-        backend == AudioBackend::TestNull ? ma_backend_null : ma_backend_wasapi;
-    require(ma_context_init(&selected, 1, nullptr, &context), "Initialize WASAPI");
+    const ma_backend selected = backend == AudioBackend::TestNull ? ma_backend_null
+                                : backend == AudioBackend::Alsa   ? ma_backend_alsa
+                                : backend == AudioBackend::Wasapi ? ma_backend_wasapi
+#ifdef _WIN32
+                                                                  : ma_backend_wasapi;
+#else
+                                                                  : ma_backend_alsa;
+#endif
+    require(ma_context_init(&selected, 1, nullptr, &context), "Initialize native audio backend");
   }
   ~Host() {
     ma_context_uninit(&context);
@@ -26,9 +33,9 @@ struct Host {
 };
 std::shared_ptr<Host> get_host(AudioBackend backend) {
   static std::mutex mutex;
-  static std::weak_ptr<Host> system, test;
+  static std::map<AudioBackend, std::weak_ptr<Host>> hosts;
   std::lock_guard lock(mutex);
-  auto& slot = backend == AudioBackend::TestNull ? test : system;
+  auto& slot = hosts[backend];
   auto host = slot.lock();
   if (!host) {
     host = std::make_shared<Host>(backend);
@@ -42,12 +49,14 @@ std::optional<ma_device_id> select_endpoint(Host& host, const EndpointConfig& co
   ma_device_info *playback = nullptr, *capture = nullptr;
   ma_uint32 np = 0, nc = 0;
   require(ma_context_get_devices(&host.context, &playback, &np, &capture, &nc),
-          "Enumerate WASAPI devices");
+          "Enumerate native audio devices");
   const bool input = config.mode == EndpointMode::Capture;
   const auto* items = input ? capture : playback;
   const auto count = input ? nc : np;
   for (ma_uint32 i = 0; i < count; ++i) {
     bool match = config.device == items[i].name;
+    if (host.context.backend == ma_backend_alsa && config.device.starts_with("alsa:"))
+      match = config.device.substr(5) == items[i].id.alsa;
 #ifdef _WIN32
     if (config.device.starts_with("id:") && host.context.backend == ma_backend_wasapi) {
       const auto& id = config.device;
@@ -73,6 +82,9 @@ struct AudioEndpoint::Impl {
   bool initialized = false;
   std::atomic<bool> online{false};
   Impl(EndpointConfig c, AudioBackend backend) : host(get_host(backend)), config(std::move(c)) {
+    if (config.mode == EndpointMode::Loopback && host->context.backend != ma_backend_wasapi)
+      throw std::runtime_error("This backend has no system-mix loopback. Use Capture with an ALSA "
+                               "loopback/monitor device.");
     if (!supported_sample_rate(config.sample_rate) || config.buffer_frames < 64 ||
         config.buffer_frames > 2048)
       throw std::runtime_error("Invalid audio format or buffer size");
@@ -118,7 +130,7 @@ struct AudioEndpoint::Impl {
                notice->type == ma_device_notification_type_interruption_began)
         self.online = false;
     };
-    require(ma_device_init(&host->context, &native, &device), "Open WASAPI audio endpoint");
+    require(ma_device_init(&host->context, &native, &device), "Open native audio endpoint");
     initialized = true;
     if (channels() < 1 || channels() > 32) {
       ma_device_uninit(&device);
@@ -140,7 +152,7 @@ AudioEndpoint::AudioEndpoint(EndpointConfig c, AudioBackend b)
 AudioEndpoint::~AudioEndpoint() = default;
 void AudioEndpoint::start() {
   require(ma_device_start(&impl_->device),
-          "Start WASAPI endpoint (check device and microphone permissions)");
+          "Start audio endpoint (check device access and audio permissions)");
   impl_->online = true;
 }
 void AudioEndpoint::stop() {

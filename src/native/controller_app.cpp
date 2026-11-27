@@ -3,6 +3,7 @@
 #include "aoip/network.hpp"
 #include "app_window.hpp"
 #include "clock_view.hpp"
+#include "iot_manager.hpp"
 #include "matrix_model.hpp"
 #include <ctime>
 #include <memory>
@@ -10,7 +11,18 @@ namespace {
 using namespace aoip;
 using namespace aoip::ui;
 using namespace aoip::desktop;
-enum Id { Save = 201, Load, Expand, Collapse, TxSearch, RxSearch, Online, HScroll, VScroll };
+enum Id {
+  Save = 201,
+  Load,
+  Expand,
+  Collapse,
+  TxSearch,
+  RxSearch,
+  Online,
+  HScroll,
+  VScroll,
+  ManageIoT
+};
 class ControllerWindow final : public AppWindow {
 public:
   int port = 3210, tab = 0, sx = 0, sy = 0;
@@ -43,6 +55,7 @@ public:
     add_button(Load, L"Load preset");
     add_button(Expand, L"Expand all");
     add_button(Collapse, L"Collapse all");
+    add_button(ManageIoT, L"Manage IoT");
     add(TxSearch, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL);
     add(RxSearch, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL);
     add_combo(Online, {L"All devices", L"Online only"});
@@ -77,6 +90,7 @@ public:
     position(Load, {130, 65, 110, 28});
     position(Expand, {252, 65, 105, 28});
     position(Collapse, {365, 65, 105, 28});
+    position(ManageIoT, {482, 65, 115, 28});
     const int edit = std::max(130, (width - 360) / 2);
     position(TxSearch, {91, 105, edit, 27});
     position(RxSearch, {188 + edit, 105, edit, 27});
@@ -139,6 +153,10 @@ public:
     }
     if (!controller)
       return;
+    if (id == ManageIoT) {
+      manage_iot(window, model.state.at("devices"));
+      return;
+    }
     if (id == Save) {
       if (auto file = json_file_dialog(window, true, L"OpenAoIP-routing.json")) {
         write_configuration(*file, controller->preset());
@@ -160,7 +178,7 @@ public:
     text(dc, {12, 103, 76, 28}, L"TX / device", 11, muted);
     const int edit = std::max(130, (width - 360) / 2);
     text(dc, {103 + edit, 103, 82, 28}, L"RX search", 11, muted);
-    text(dc, {490, 65, width - 505, 28},
+    text(dc, {613, 65, width - 628, 28},
          L"TX horizontal  /  RX vertical  ·  Click to route  ·  Double-click a label to rename", 11,
          muted);
     for (int i = 0; i < 5; ++i) {
@@ -329,9 +347,15 @@ public:
       const bool online = d.value("online", false);
       std::vector<std::wstring> values{wide(d.at("name"))};
       if (tab == 1)
-        values.insert(values.end(), {online ? L"Online" : L"Offline", wide(d.at("host")),
-                                     std::to_wstring(tx) + L" / " + std::to_wstring(rx),
-                                     std::to_wstring(rate) + L" Hz"});
+        values.insert(values.end(),
+                      {online
+                           ? (d.contains("management")
+                                  ? (d.at("management").value("running", false) ? L"IoT · Running"
+                                                                                : L"IoT · Stopped")
+                                  : L"Online")
+                           : L"Offline",
+                       wide(d.at("host")), std::to_wstring(tx) + L" / " + std::to_wstring(rx),
+                       std::to_wstring(rate) + L" Hz"});
       if (tab == 2) {
         const auto clock = d.value("clock", Json::object());
         values.insert(values.end(), {wide(clock.value("mode", "Internal / software")),

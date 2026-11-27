@@ -125,7 +125,12 @@ void run(const wchar_t* dll_path, int sample_rate, std::shared_ptr<ptp::Monitor>
   check(driver->createBuffers(buffers.data(), 4, 256, &cb) == ASE_OK, "ASIO createBuffers failed");
   check(engine->status().at("activeBufferFrames") == 256,
         "ASIO negotiated buffer size was not reported");
-  eventually([&] { return controller.state().at("devices").size() == 1; });
+  try {
+    eventually([&] { return controller.state().at("devices").size() == 1; });
+  } catch (...) {
+    std::cerr << "ASIO device registration failed: " << engine->status().dump() << '\n';
+    throw;
+  }
   controller.set_route({{"sender", "asio-test"},
                         {"stream", "stream-1"},
                         {"senderChannel", 2},
@@ -150,6 +155,7 @@ void run(const wchar_t* dll_path, int sample_rate, std::shared_ptr<ptp::Monitor>
     });
     passed = true;
   } catch (...) {
+    std::cerr << "ASIO waveform failed at " << rate << " Hz: " << engine->status().dump() << '\n';
     driver->stop();
     driver->disposeBuffers();
     driver->Release();

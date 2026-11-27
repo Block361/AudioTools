@@ -99,6 +99,7 @@ struct AudioSession::Impl {
           }
           DeviceConfig c;
           c.id = config.id;
+          c.register_with_controller = config.register_with_controller;
           c.name = config.name;
           c.controller = controller;
           c.host = config.interface_ip;
@@ -230,5 +231,13 @@ AudioSession::AudioSession(SessionConfig c) : impl_(std::make_unique<Impl>(std::
 AudioSession::~AudioSession() = default;
 Json AudioSession::status() const {
   return impl_->status();
+}
+void AudioSession::apply_plan(const Json& plan) {
+  std::lock_guard lock(impl_->mutex);
+  if (impl_->node) {
+    impl_->node->apply_plan(plan);
+    impl_->last_plan = monotonic_ms();
+    impl_->network_error.clear();
+  }
 }
 } // namespace aoip

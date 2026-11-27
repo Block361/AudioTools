@@ -7,6 +7,7 @@ function(openaoip_installer kind app)
     "${CMAKE_SOURCE_DIR}/WINDOWS-AUDIO.md|WINDOWS-AUDIO.md"
     "${CMAKE_SOURCE_DIR}/ARCHITECTURE.md|ARCHITECTURE.md"
     "${CMAKE_SOURCE_DIR}/PTP.md|PTP.md"
+    "${CMAKE_SOURCE_DIR}/IOT.md|IOT.md"
     "${CMAKE_SOURCE_DIR}/LICENSE|LICENSE" "${CMAKE_SOURCE_DIR}/THIRD_PARTY.md|THIRD_PARTY.md"
     "${CMAKE_SOURCE_DIR}/drivers/wdm/README.md|drivers/wdm/README.md")
   list(APPEND payloads "${CMAKE_SOURCE_DIR}/drivers/wdm/VM-TEST.md|drivers/wdm/VM-TEST.md")
