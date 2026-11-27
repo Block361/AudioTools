@@ -1,0 +1,27 @@
+[Unit]
+Description=OpenAoIP IoT headless network audio
+Wants=network-online.target
+After=network-online.target sound.target
+
+[Service]
+Type=simple
+User=openaoip-iot
+Group=openaoip-iot
+SupplementaryGroups=audio
+StateDirectory=openaoip-iot
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/openaoip-iot
+ExecStart=/usr/local/bin/openaoip-iot --config /var/lib/openaoip-iot/iot.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/openaoip-iot
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

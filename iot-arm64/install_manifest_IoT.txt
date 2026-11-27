@@ -1,0 +1,14 @@
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/bin/openaoip-iot
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/./IOT.md
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/./LICENSE
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/./THIRD_PARTY.md
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/deploy/install.sh
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/deploy/openaoip-iot.service
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/examples/iot-audio.json
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/licenses/LICENSE-httplib.txt
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/licenses/LICENSE-json.txt
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/licenses/LICENSE-miniaudio.txt
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/./PTP.md
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/./WINDOWS-START.md
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/./WINDOWS-AUDIO.md
+/src/build/iot-arm64/packages/_CPack_Packages/Linux/TGZ/OpenAoIP-IoT-0.1.0-Linux-aarch64/IoT/OpenAoIP-IoT-0.1.0-Linux-aarch64/./ARCHITECTURE.md

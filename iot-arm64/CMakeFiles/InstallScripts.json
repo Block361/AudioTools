@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/src/build/iot-arm64/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
